@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Prevent Vite HMR WebSocket error in AI Studio iframe sandbox
+      (function() {
+        if (typeof window !== 'undefined') {
+          // Filter unhandled WebSocket rejection banners
+          window.addEventListener('unhandledrejection', function(event) {
+            var reason = event && event.reason ? (event.reason.message || String(event.reason)) : '';
+            if (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1 || reason.indexOf('closed without opened') !== -1) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return true;
+            }
+          }, true);
+
+          window.addEventListener('error', function(event) {
+            var msg = event ? (event.message || String(event)) : '';
+            if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1 || msg.indexOf('closed without opened') !== -1) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return true;
+            }
+          }, true);
+
+          // Mock WebSocket for HMR requests so Vite client never fails to connect
+          try {
+            var NativeWS = window.WebSocket;
+            function MockHmrWebSocket(url, protocols) {
+              if (typeof url === 'string' && (url.indexOf('vite-hmr') !== -1 || protocols === 'vite-hmr' || url.indexOf('ws:') === 0 || url.indexOf('wss:') === 0)) {
+                var target = new EventTarget();
+                target.url = url;
+                target.readyState = 1; // OPEN
+                target.send = function() {};
+                target.close = function() {
+                  target.readyState = 3;
+                };
+                setTimeout(function() {
+                  target.dispatchEvent(new Event('open'));
+                }, 10);
+                return target;
+              }
+              return new NativeWS(url, protocols);
+            }
+            if (NativeWS) {
+              MockHmrWebSocket.prototype = NativeWS.prototype;
+              MockHmrWebSocket.CONNECTING = NativeWS.CONNECTING || 0;
+              MockHmrWebSocket.OPEN = NativeWS.OPEN || 1;
+              MockHmrWebSocket.CLOSING = NativeWS.CLOSING || 2;
+              MockHmrWebSocket.CLOSED = NativeWS.CLOSED || 3;
+              window.WebSocket = MockHmrWebSocket;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      })();
+    </script>
+    <title>Clover Downloader — Ultra-Fast Media & Music Downloader</title>
+    <meta name="description" content="Ultra-fast minimalist media and music downloader for YouTube, X, Spotify, Apple Music, and SoundCloud with high-fidelity MP3/MP4 conversion." />
+    <meta property="og:title" content="Clover Downloader — Ultra-Fast Media & Music Downloader" />
+    <meta property="og:description" content="Ultra-fast minimalist media and music downloader for YouTube, X, Spotify, Apple Music, and SoundCloud with high-fidelity MP3/MP4 conversion." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Syne:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#0b0813] text-[#e8e4f3] antialiased selection:bg-purple-600/30 selection:text-purple-200 min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

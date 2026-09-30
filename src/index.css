@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-display: 'Syne', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #080410;
+    color: #eae5f8;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Ambient sleek moving background keyframes */
+@keyframes fluidOrb1 {
+  0% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(70px, 50px) scale(1.18) rotate(30deg);
+  }
+  66% {
+    transform: translate(-30px, 80px) scale(0.95) rotate(-20deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes fluidOrb2 {
+  0% {
+    transform: translate(0px, 0px) scale(1.05) rotate(0deg);
+  }
+  33% {
+    transform: translate(-60px, -40px) scale(0.9) rotate(-35deg);
+  }
+  66% {
+    transform: translate(50px, -60px) scale(1.15) rotate(25deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1.05) rotate(0deg);
+  }
+}
+
+@keyframes fluidOrb3 {
+  0% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(60px, -70px) scale(1.2) rotate(45deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes fluidOrb4 {
+  0% {
+    transform: translate(0px, 0px) scale(0.9) rotate(0deg);
+  }
+  50% {
+    transform: translate(-70px, 60px) scale(1.12) rotate(-40deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(0.9) rotate(0deg);
+  }
+}
+
+@keyframes subtleWave {
+  0%, 100% {
+    opacity: 0.15;
+    transform: translateY(0px) scaleY(1);
+  }
+  50% {
+    opacity: 0.28;
+    transform: translateY(-25px) scaleY(1.08);
+  }
+}
+
+.ambient-orb-1 {
+  animation: fluidOrb1 20s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ambient-orb-2 {
+  animation: fluidOrb2 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ambient-orb-3 {
+  animation: fluidOrb3 22s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ambient-orb-4 {
+  animation: fluidOrb4 26s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ambient-wave {
+  animation: subtleWave 12s ease-in-out infinite alternate;
+}
+
+/* Page Transition Smooth Entrance */
+.page-enter {
+  animation: pageTransition 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageTransition {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Google AI Mode Style Continuously Moving Outer Glow Beam */
+@keyframes spinGlowBeam {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.glow-beam-rotate {
+  animation: spinGlowBeam 5.5s linear infinite;
+  will-change: transform;
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #080410;
+}
+::-webkit-scrollbar-thumb {
+  background: #261942;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #472d7c;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Clover Downloader",
+  "description": "Ultra-fast minimalist media and music downloader for YouTube, X, Spotify, Apple Music, and SoundCloud with high-fidelity MP3/MP4 conversion.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
