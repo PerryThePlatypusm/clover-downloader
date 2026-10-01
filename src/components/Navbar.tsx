@@ -24,8 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenDevDashboard,
 }) => {
   const isCloverDevUser =
-    currentUser?.username?.toLowerCase() === 'clover' ||
-    currentUser?.email?.toLowerCase() === 'jacobperry27@gmail.com';
+    currentUser?.username?.toLowerCase() === 'clover';
 
   const showDevBadge = isCloverDevUser && !!currentUser;
 
@@ -35,28 +34,28 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Zone 1: Brand Zone */}
         <button
           onClick={() => setActiveTab('social')}
-          className="flex items-center gap-2.5 text-left group focus:outline-none cursor-pointer"
+          className="flex items-center gap-2 text-left group focus:outline-none cursor-pointer mr-6 sm:mr-8 shrink-0"
         >
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[#9d4edd] to-[#6b21a8] flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform duration-300 ease-out">
-            <span className="text-emerald-300 font-bold text-lg leading-none">🍀</span>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#9d4edd] to-[#6b21a8] flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform duration-300 ease-out">
+            <span className="text-emerald-300 font-bold text-base leading-none">🍀</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-display text-lg sm:text-xl font-bold tracking-tight text-white group-hover:text-purple-200 transition-colors duration-200">
+            <span className="font-display text-sm sm:text-[15px] font-bold tracking-tight text-white group-hover:text-purple-200 transition-colors duration-200 whitespace-nowrap">
               Clover Downloader
             </span>
             {showDevBadge && (
-              <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-lg bg-[#220d3d] text-[#c084fc] border border-purple-600/50 font-bold tracking-wider shadow-sm select-none animate-in fade-in zoom-in-95 duration-200">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-lg bg-[#220d3d] text-[#c084fc] border border-purple-600/50 font-bold tracking-wider shadow-sm select-none animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
                 DEV
               </span>
             )}
           </div>
         </button>
 
-        {/* Zone 2: 3 clean text navigation links */}
-        <nav className="hidden md:flex items-center gap-7 text-sm font-medium">
+        {/* Zone 2: clean text navigation links */}
+        <nav className="hidden md:flex items-center gap-6 lg:gap-7 text-sm font-medium">
           <button
             onClick={() => setActiveTab('social')}
-            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer ${
+            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap ${
               activeTab === 'social'
                 ? 'text-purple-300 font-semibold'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -70,7 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => setActiveTab('music')}
-            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer ${
+            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap ${
               activeTab === 'music'
                 ? 'text-purple-300 font-semibold'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -83,8 +82,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('streaming')}
+            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap ${
+              activeTab === 'streaming'
+                ? 'text-red-300 font-semibold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Netflix & Crunchyroll
+            {activeTab === 'streaming' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500 to-amber-500 rounded-full" />
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('credits')}
-            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer ${
+            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap ${
               activeTab === 'credits'
                 ? 'text-purple-300 font-semibold'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -98,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => setActiveTab('dev')}
-            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer flex items-center gap-1.5 ${
+            className={`transition-colors relative py-1 text-xs uppercase tracking-wider cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'dev'
                 ? 'text-purple-300 font-semibold'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -170,10 +183,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Mobile nav bar row */}
-      <div className="md:hidden flex items-center justify-around border-t border-purple-900/20 px-2 py-2 bg-[#0b0714]/95">
+      <div className="md:hidden flex items-center justify-around overflow-x-auto border-t border-purple-900/20 px-2 py-2 bg-[#0b0714]/95">
         <button
           onClick={() => setActiveTab('social')}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+          className={`px-2 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'social' ? 'bg-purple-900/50 text-purple-200 font-semibold' : 'text-zinc-400'
           }`}
         >
@@ -181,15 +194,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('music')}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+          className={`px-2 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'music' ? 'bg-purple-900/50 text-purple-200 font-semibold' : 'text-zinc-400'
           }`}
         >
           Music
         </button>
         <button
+          onClick={() => setActiveTab('streaming')}
+          className={`px-2 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === 'streaming' ? 'bg-red-900/50 text-red-200 font-semibold' : 'text-zinc-400'
+          }`}
+        >
+          Streaming
+        </button>
+        <button
           onClick={() => setActiveTab('credits')}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+          className={`px-2 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'credits' ? 'bg-purple-900/50 text-purple-200 font-semibold' : 'text-zinc-400'
           }`}
         >
@@ -197,7 +218,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('dev')}
-          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+          className={`px-2 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'dev' ? 'bg-purple-900/50 text-purple-200 font-semibold' : 'text-zinc-400'
           }`}
         >

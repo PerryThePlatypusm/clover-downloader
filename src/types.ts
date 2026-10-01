@@ -1,4 +1,4 @@
-export type TabType = 'social' | 'music' | 'credits' | 'dev';
+export type TabType = 'social' | 'music' | 'streaming' | 'credits' | 'dev';
 
 export type MediaPlatform =
   | 'youtube'
@@ -10,6 +10,8 @@ export type MediaPlatform =
   | 'spotify'
   | 'applemusic'
   | 'soundcloud'
+  | 'netflix'
+  | 'crunchyroll'
   | 'twitch'
   | 'vimeo'
   | 'dailymotion'
@@ -65,6 +67,7 @@ export interface MusicTrack {
 
 export interface UserProfile {
   id: string;
+  uid?: string;
   username: string;
   email: string;
   avatarColor: string;

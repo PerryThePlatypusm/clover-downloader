@@ -14,7 +14,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab }) => {
         <div className="flex flex-col items-center md:items-start gap-1.5 text-center md:text-left">
           <div className="flex items-center gap-2">
             <span className="text-emerald-400 font-bold">🍀</span>
-            <span className="font-display font-bold text-white text-base tracking-tight">
+            <span className="font-display font-bold text-white text-base tracking-tight whitespace-nowrap">
               Clover Downloader
             </span>
           </div>

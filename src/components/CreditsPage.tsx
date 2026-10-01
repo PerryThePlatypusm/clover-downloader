@@ -134,7 +134,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
           <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
           <span>Project Acknowledgements & Vision</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mb-3">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mb-3 whitespace-nowrap">
           Credits & Origin
         </h1>
         <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">

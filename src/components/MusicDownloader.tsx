@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { MusicTrack, DownloadTask, DownloadFormat } from '../types';
-import { SAMPLE_MUSIC_TRACKS, createPlayableBlob, triggerFileDownload, playPreviewSound } from '../utils/mediaUtils';
+import {
+  SAMPLE_MUSIC_TRACKS,
+  createPlayableBlob,
+  triggerFileDownload,
+  triggerDirectDownload,
+  resolveMediaInfo,
+  startRealDownload,
+  detectPlatform,
+  playPreviewSound,
+} from '../utils/mediaUtils';
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
 import {
@@ -14,6 +23,12 @@ import {
   Layers,
   BrainCircuit,
   Zap,
+  Mic,
+  MessageSquare,
+  Send,
+  Upload,
+  FileAudio,
+  X,
 } from 'lucide-react';
 
 interface MusicDownloaderProps {
@@ -33,13 +48,109 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   const [selectedFormat, setSelectedFormat] = useState<DownloadFormat>('flac');
   const [selectedBitrate, setSelectedBitrate] = useState('24-bit / 192kHz (Master FLAC)');
   const [isPlayingPreview, setIsPlayingPreview] = useState<string | null>(null);
+
+  // Gemini Thinking Resolver state
   const [thinkingQuery, setThinkingQuery] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingResult, setThinkingResult] = useState<any>(null);
-  const [playlistQueueProgress, setPlaylistQueueProgress] = useState<number | null>(null);
-  const [playlistDownloadIndex, setPlaylistDownloadIndex] = useState(0);
+  const [thinkingAudioBase64, setThinkingAudioBase64] = useState<string | null>(null);
+  const [thinkingAudioFileName, setThinkingAudioFileName] = useState<string | null>(null);
+  const [thinkingAudioMime, setThinkingAudioMime] = useState<string>('audio/mpeg');
+  const [isRecordingForThinking, setIsRecordingForThinking] = useState(false);
+  const thinkingFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const tracks = SAMPLE_MUSIC_TRACKS;
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcribeStatus, setTranscribeStatus] = useState<string | null>(null);
+
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'model'; content: string }>>([
+    { role: 'model', content: "Hello! I'm your Clover Audio Master AI. Ask me anything about high-res FLAC codecs, track identification, or audio mixing!" }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+
+  const handleStartMicrophoneTranscription = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert('Microphone not supported in this environment.');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        setTranscribeStatus('Transcribing with gemini-3.5-transcribe...');
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Data = (reader.result as string).split(',')[1];
+          try {
+            const res = await fetch('/api/gemini/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64: base64Data, mimeType: 'audio/webm' }),
+            });
+            const data = await res.json();
+            if (data.success && data.text) {
+              setSearchQuery(data.text);
+              setTranscribeStatus('Audio transcribed successfully!');
+            }
+          } catch (err) {
+            setTranscribeStatus('Transcription failed.');
+          } finally {
+            setTimeout(() => setTranscribeStatus(null), 3000);
+          }
+        };
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setTranscribeStatus('Listening... Speak song or artist...');
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+        setIsRecording(false);
+        stream.getTracks().forEach((t) => t.stop());
+      }, 4000);
+    } catch (err) {
+      setIsRecording(false);
+      setTranscribeStatus('Microphone permission denied.');
+      setTimeout(() => setTranscribeStatus(null), 3000);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatting) return;
+
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    const newMessages = [...chatMessages, { role: 'user' as const, content: userMsg }];
+    setChatMessages(newMessages);
+    setIsChatting(true);
+
+    try {
+      const res = await fetch('/api/gemini/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const data = await res.json();
+      if (data.success && data.reply) {
+        setChatMessages([...newMessages, { role: 'model' as const, content: data.reply }]);
+      }
+    } catch (err) {
+      setChatMessages([...newMessages, { role: 'model' as const, content: 'Error communicating with AI assistant.' }]);
+    } finally {
+      setIsChatting(false);
+    }
+  };
 
   const handlePlayPreview = (trackId: string) => {
     if (isPlayingPreview === trackId) {
@@ -53,13 +164,13 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
 
   const handleDownloadSingleTrack = (track: MusicTrack) => {
     const ext = selectedFormat;
-    const cleanTitle = track.title.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${track.artist}_${cleanTitle}_${selectedFormat}.${ext}`;
-    const baseSpeed = 110.0; // 100% Free uncapped speed
+    const cleanTitle = track.title.replace(/[\\/:*?"<>|]/g, '').trim();
+    const fileName = `${track.artist} - ${cleanTitle}.${ext}`;
+    const baseSpeed = 110.0;
 
     const newTask: DownloadTask = {
       id: `music_${Date.now()}_${track.id}`,
-      url: `https://${track.platform}.com/track/${track.id}`,
+      url: `/api/media/sample-track/${track.id}`,
       title: `${track.title} — ${track.artist}`,
       author: track.artist,
       platform: track.platform,
@@ -67,7 +178,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       quality: selectedBitrate,
       progress: 0,
       status: 'downloading',
-      speedMBs: baseSpeed + (Math.random() * 8 - 4),
+      speedMBs: baseSpeed,
       totalSizeMB: track.sizeMB,
       downloadedSizeMB: 0,
       etaSeconds: track.sizeMB / baseSpeed,
@@ -91,42 +202,184 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
 
-        const blob = createPlayableBlob(newTask.title, newTask.format, newTask.quality);
-        triggerFileDownload(blob, newTask.fileName);
+        triggerDirectDownload(`/api/media/sample-track/${track.id}`, fileName);
       } else {
         newTask.progress = progress;
-        newTask.downloadedSizeMB = (progress / 100) * track.sizeMB;
+        newTask.downloadedSizeMB = Math.round(((progress / 100) * track.sizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (track.sizeMB - newTask.downloadedSizeMB) / baseSpeed);
       }
     }, 120);
   };
 
-  const handleBatchDownload = () => {
-    setPlaylistQueueProgress(0);
-    setPlaylistDownloadIndex(0);
+  const handleDirectMusicDownload = async () => {
+    if (!searchQuery.trim()) return;
+    const query = searchQuery.trim();
+    const itemPlatform = detectPlatform(query);
 
-    let currentIdx = 0;
-    const downloadNext = () => {
-      if (currentIdx >= tracks.length) {
-        setPlaylistQueueProgress(100);
-        setTimeout(() => setPlaylistQueueProgress(null), 3000);
-        return;
+    let cleanTitle = query;
+    try {
+      if (query.startsWith('http://') || query.startsWith('https://')) {
+        const parsed = new URL(query);
+        const lastPart = parsed.pathname.split('/').filter(Boolean).pop();
+        if (lastPart) cleanTitle = lastPart.replace(/[^a-zA-Z0-9_-]/g, ' ');
       }
+    } catch {}
 
-      setPlaylistDownloadIndex(currentIdx + 1);
-      const track = tracks[currentIdx];
-      handleDownloadSingleTrack(track);
+    const initialTitle = cleanTitle.length > 2 ? cleanTitle : 'Master Audio Track';
+    const ext = selectedFormat;
+    const baseSpeed = 110.0;
+    const estimatedSizeMB = selectedFormat === 'flac' ? 24.5 : selectedFormat === 'wav' ? 38.0 : 8.5;
 
-      currentIdx++;
-      setPlaylistQueueProgress(Math.round((currentIdx / tracks.length) * 100));
-      setTimeout(downloadNext, 1100);
+    const taskId = `music_${Date.now()}`;
+    const newTask: DownloadTask = {
+      id: taskId,
+      url: query,
+      title: initialTitle,
+      author: 'Resolving audio...',
+      platform: itemPlatform === 'other' ? 'spotify' : itemPlatform,
+      format: selectedFormat,
+      quality: selectedBitrate,
+      progress: 5,
+      status: 'downloading',
+      speedMBs: baseSpeed,
+      totalSizeMB: estimatedSizeMB,
+      downloadedSizeMB: 0,
+      etaSeconds: estimatedSizeMB / baseSpeed,
+      createdAt: Date.now(),
+      fileName: `${initialTitle}.${ext}`,
     };
 
-    downloadNext();
+    onStartDownload(newTask);
+
+    // Resolve real track title if URL
+    let realTitle = initialTitle;
+    if (query.startsWith('http://') || query.startsWith('https://')) {
+      try {
+        const resolved = await resolveMediaInfo(query);
+        if (resolved.title) {
+          realTitle = resolved.title;
+          newTask.title = realTitle;
+        }
+        if (resolved.author) {
+          newTask.author = resolved.author;
+        }
+        if (resolved.sizeMB) {
+          newTask.totalSizeMB = resolved.sizeMB;
+        }
+      } catch (e) {
+        console.warn('Track resolution error:', e);
+      }
+    }
+
+    const downloadPromise = startRealDownload({
+      url: query,
+      format: selectedFormat,
+      quality: selectedBitrate,
+      title: realTitle,
+    });
+
+    let currentProgress = 5;
+    const interval = setInterval(() => {
+      if (currentProgress < 90) {
+        currentProgress += Math.random() * 8 + 4;
+        newTask.progress = Math.min(90, Math.round(currentProgress));
+        newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
+        newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+      }
+    }, 120);
+
+    try {
+      const result = await downloadPromise;
+      clearInterval(interval);
+
+      if (result.success && result.downloadUrl) {
+        const finalTitle = result.title || realTitle;
+        const cleanSafe = finalTitle.replace(/[\\/:*?"<>|]/g, '').trim() || 'song';
+        const finalFilename = result.filename || `${cleanSafe}.${selectedFormat}`;
+
+        newTask.title = finalTitle;
+        newTask.fileName = finalFilename;
+        newTask.totalSizeMB = result.sizeMB;
+        newTask.downloadedSizeMB = result.sizeMB;
+        newTask.progress = 100;
+        newTask.status = 'completed';
+        newTask.speedMBs = 0;
+        newTask.etaSeconds = 0;
+
+        triggerDirectDownload(result.downloadUrl, finalFilename);
+      } else {
+        newTask.status = 'error';
+        newTask.progress = 0;
+        newTask.speedMBs = 0;
+        newTask.etaSeconds = 0;
+      }
+    } catch (err) {
+      clearInterval(interval);
+      console.error('Download music error:', err);
+      newTask.status = 'error';
+      newTask.progress = 0;
+      newTask.speedMBs = 0;
+      newTask.etaSeconds = 0;
+    }
+  };
+
+  const handleThinkingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setThinkingAudioFileName(file.name);
+    setThinkingAudioMime(file.type || 'audio/mpeg');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setThinkingAudioBase64(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRecordVoiceForThinking = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert('Microphone not supported in this environment.');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        setThinkingAudioFileName('voice_humming_recording.webm');
+        setThinkingAudioMime('audio/webm');
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const b64 = (reader.result as string).split(',')[1];
+          setThinkingAudioBase64(b64);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      mediaRecorder.start();
+      setIsRecordingForThinking(true);
+
+      setTimeout(() => {
+        if (mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
+        setIsRecordingForThinking(false);
+        stream.getTracks().forEach((t) => t.stop());
+      }, 5000);
+    } catch {
+      setIsRecordingForThinking(false);
+    }
   };
 
   const handleDeepThinkingSearch = async () => {
-    if (!thinkingQuery.trim()) return;
+    if (!thinkingQuery.trim() && !thinkingAudioBase64) return;
     setIsThinking(true);
     setThinkingResult(null);
 
@@ -136,7 +389,9 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: thinkingQuery,
-          type: 'music_identification_lossless',
+          audioBase64: thinkingAudioBase64,
+          mimeType: thinkingAudioMime,
+          type: 'audio_music_identification_lossless',
         }),
       });
       const data = await res.json();
@@ -158,8 +413,8 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
           <Zap className="w-3.5 h-3.5 text-emerald-400" />
           <span>100% Free · Lossless Audio · Accounts Aren't Needed</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mb-3">
-          Spotify, Apple Music & SoundCloud
+        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-3 whitespace-nowrap">
+          Spotify, Apple Music & SoundCloud Downloader
         </h1>
         <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
           Rip high-fidelity audio up to 24-bit 192kHz FLAC or 320kbps MP3 with embedded album art, lossless tags, and instant device download.
@@ -168,18 +423,58 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
 
       {/* Top Controls: Search / URL bar & Format Selector with Moving Outer Glow */}
       <GlowBeamBox className="max-w-4xl mx-auto" innerClassName="p-5 sm:p-7 space-y-5">
-        {/* Search / URL input */}
-        <div className="relative">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
-            <Search className="w-5 h-5" />
+        {/* Search / URL input with Transcribe Audio microphone button & direct Download button */}
+        <div className="space-y-2">
+          <div className="relative flex items-center">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
+              <Search className="w-5 h-5" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleDirectMusicDownload();
+                }
+              }}
+              placeholder="Paste Spotify track/album/playlist link, Apple Music URL, or search artist / song..."
+              className="w-full pl-12 pr-52 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+            />
+            <div className="absolute right-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleDirectMusicDownload}
+                disabled={!searchQuery.trim()}
+                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1"
+                title="Press Enter or click to download"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleStartMicrophoneTranscription}
+                disabled={isRecording}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isRecording
+                    ? 'bg-rose-600 text-white animate-pulse'
+                    : 'bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-600/40'
+                }`}
+                title="Transcribe Audio with Gemini"
+              >
+                <Mic className={`w-3.5 h-3.5 ${isRecording ? 'animate-bounce' : ''}`} />
+                <span>{isRecording ? 'Listening...' : 'Transcribe'}</span>
+              </button>
+            </div>
           </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Paste Spotify track/album/playlist link, Apple Music URL, or search artist / song..."
-            className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
-          />
+          {transcribeStatus && (
+            <div className="text-xs text-purple-300 font-mono px-1 flex items-center gap-1.5 animate-in fade-in">
+              <Sparkles className="w-3 h-3 text-purple-400 animate-spin" />
+              <span>{transcribeStatus}</span>
+            </div>
+          )}
         </div>
 
         {/* Format Selector Bar */}
@@ -275,100 +570,62 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
           </div>
         </div>
 
-        {/* Batch Playlist Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-purple-900/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Layers className="w-4 h-4 text-purple-400" />
-            <span>Playlist Mode: <strong>3 Curated Tracks Ready</strong></span>
-          </div>
-
-          <button
-            onClick={handleBatchDownload}
-            disabled={playlistQueueProgress !== null}
-            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-purple-900/40 hover:bg-purple-800/50 border border-purple-600/40 text-purple-200 text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-purple-300" />
-            <span>
-              {playlistQueueProgress !== null
-                ? `Downloading Track ${playlistDownloadIndex}/${tracks.length} (${playlistQueueProgress}%)`
-                : 'Batch Download All (ZIP)'}
-            </span>
-          </button>
-        </div>
-      </GlowBeamBox>
-
-      {/* Track List Section */}
-      <div className="max-w-4xl mx-auto space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-purple-300">
-            Featured Master Tracks ({tracks.length})
-          </h3>
-          <span className="text-xs text-zinc-400">Click Play to preview harmonic tone</span>
-        </div>
-
-        <div className="space-y-3">
-          {tracks.map((track) => (
-            <div
-              key={track.id}
-              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#140e24]/80 border border-purple-900/30 hover:border-purple-700/50 transition-all duration-200 shadow-md"
-            >
-              {/* Left: Thumbnail & details */}
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-purple-800/30 bg-[#1f153a]">
-                  <img
-                    src={track.coverUrl}
-                    alt={track.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <button
-                    onClick={() => handlePlayPreview(track.id)}
-                    className="absolute inset-0 bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-opacity"
-                    title="Preview Chime"
-                  >
-                    {isPlayingPreview === track.id ? (
-                      <Volume2 className="w-5 h-5 text-emerald-400 animate-pulse" />
-                    ) : (
-                      <Play className="w-5 h-5 text-purple-200 ml-0.5" />
-                    )}
-                  </button>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded text-white bg-purple-900/80 border border-purple-700/50 text-[10px]">
-                      {track.platform}
-                    </span>
-                    <span className="text-xs text-purple-400 font-mono">{track.bitrate}</span>
-                  </div>
-                  <h4 className="text-sm font-semibold text-white truncate max-w-sm">
-                    {track.title}
-                  </h4>
-                  <p className="text-xs text-zinc-400 truncate">
-                    {track.artist} · <span className="text-zinc-500">{track.album}</span>
-                  </p>
-                </div>
+        {/* Gemini Chatbot Assistant Widget */}
+        <div className="p-4 rounded-xl bg-[#130b22] border border-purple-800/40 space-y-3">
+          <div className="flex items-center justify-between border-b border-purple-900/40 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                <MessageSquare className="w-4 h-4" />
               </div>
-
-              {/* Right: Meta & Download action */}
-              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-purple-900/20">
-                <div className="text-right text-xs font-mono text-zinc-400">
-                  <div>{track.duration}</div>
-                  <div className="text-zinc-500">{track.sizeMB} MB</div>
-                </div>
-
-                <button
-                  onClick={() => handleDownloadSingleTrack(track)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-purple-600/20 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Free</span>
-                </button>
+              <div>
+                <div className="text-xs font-bold text-white">Clover Audio Master AI</div>
+                <div className="text-[10px] text-purple-300">Powered by Gemini Chatbot (gemini-3.5-flash)</div>
               </div>
             </div>
-          ))}
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/40">
+              Active Agent
+            </span>
+          </div>
+
+          {/* Chat scrollable thread */}
+          <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1 text-xs">
+            {chatMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`p-2.5 rounded-xl max-w-[85%] leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-purple-600 text-white rounded-br-none'
+                      : 'bg-[#1b1233] border border-purple-900/50 text-purple-100 rounded-bl-none font-mono text-[11px]'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chat input form */}
+          <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-1">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask AI about FLAC bitrates, track identification, mastering..."
+              className="flex-1 px-3 py-2 rounded-xl bg-[#1b1233] border border-purple-800/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+            />
+            <button
+              type="submit"
+              disabled={isChatting || !chatInput.trim()}
+              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </form>
         </div>
-      </div>
+      </GlowBeamBox>
 
       {/* Active Music Downloads Section */}
       {activeTasks.length > 0 && (

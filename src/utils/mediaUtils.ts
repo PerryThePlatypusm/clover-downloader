@@ -11,6 +11,8 @@ export function detectPlatform(url: string): MediaPlatform {
   if (lower.includes('spotify.com')) return 'spotify';
   if (lower.includes('music.apple.com') || lower.includes('apple.com')) return 'applemusic';
   if (lower.includes('soundcloud.com')) return 'soundcloud';
+  if (lower.includes('netflix.com')) return 'netflix';
+  if (lower.includes('crunchyroll.com')) return 'crunchyroll';
   if (lower.includes('twitch.tv')) return 'twitch';
   if (lower.includes('vimeo.com')) return 'vimeo';
   if (lower.includes('dailymotion.com')) return 'dailymotion';
@@ -39,6 +41,10 @@ export function getPlatformInfo(platform: MediaPlatform): { name: string; color:
       return { name: 'Apple Music', color: '#f43f5e' };
     case 'soundcloud':
       return { name: 'SoundCloud', color: '#fb923c' };
+    case 'netflix':
+      return { name: 'Netflix', color: '#e50914' };
+    case 'crunchyroll':
+      return { name: 'Crunchyroll', color: '#f47521' };
     case 'twitch':
       return { name: 'Twitch', color: '#a855f7' };
     case 'vimeo':
@@ -48,80 +54,134 @@ export function getPlatformInfo(platform: MediaPlatform): { name: string; color:
   }
 }
 
-// Generate an authentic playable media blob
-export function createPlayableBlob(title: string, format: DownloadFormat, quality: string): Blob {
+export async function resolveMediaInfo(url: string): Promise<{
+  title: string;
+  author: string;
+  duration?: string;
+  sizeMB?: number;
+  thumbnail?: string;
+  platform?: string;
+}> {
+  try {
+    const res = await fetch(`/api/media/resolve?url=${encodeURIComponent(url.trim())}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return {
+          title: data.title,
+          author: data.author || 'Creator',
+          duration: data.duration,
+          sizeMB: data.sizeMB,
+          thumbnail: data.thumbnail,
+          platform: data.platform,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('resolveMediaInfo failed:', e);
+  }
+
+  const p = detectPlatform(url);
+  const pInfo = getPlatformInfo(p);
+  return {
+    title: `${pInfo.name} Media Stream`,
+    author: 'Creator',
+    platform: p,
+  };
+}
+
+export async function startRealDownload(params: {
+  url: string;
+  format: DownloadFormat;
+  quality: string;
+  title?: string;
+}): Promise<{
+  success: boolean;
+  downloadUrl?: string;
+  title: string;
+  filename: string;
+  sizeMB: number;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/media/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.downloadUrl) {
+        return {
+          success: true,
+          downloadUrl: data.downloadUrl,
+          title: data.title,
+          filename: data.filename,
+          sizeMB: data.sizeMB || 0,
+        };
+      } else if (data.error) {
+        return {
+          success: false,
+          title: params.title || 'media',
+          filename: `${params.title || 'media'}.${params.format}`,
+          sizeMB: 0,
+          error: data.error,
+        };
+      }
+    }
+  } catch (e: any) {
+    console.error('startRealDownload error:', e);
+  }
+
+  return {
+    success: false,
+    title: params.title || 'media',
+    filename: `${params.title || 'media'}.${params.format}`,
+    sizeMB: 0,
+    error: 'Failed to connect to media download service',
+  };
+}
+
+export function triggerDirectDownload(url: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Fetch authentic playable media blob if needed
+export async function createPlayableBlob(
+  title: string,
+  format: DownloadFormat,
+  quality: string,
+  sourceUrl?: string
+): Promise<Blob | null> {
   const ext = format.toLowerCase();
   
-  if (
-    ext === 'wav' ||
-    ext === 'mp3' ||
-    ext === 'flac' ||
-    ext === 'aac' ||
-    ext === 'opus' ||
-    ext === 'alac' ||
-    ext === 'aiff'
-  ) {
-    // Generate valid PCM 16-bit WAV file with harmonious sound
-    const sampleRate = 44100;
-    const numChannels = 2;
-    const durationSeconds = 3.5;
-    const numSamples = Math.floor(sampleRate * durationSeconds);
-    const blockAlign = 4;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = numSamples * blockAlign;
-    const buffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(buffer);
-
-    const writeString = (offset: number, str: string) => {
-      for (let i = 0; i < str.length; i++) {
-        view.setUint8(offset + i, str.charCodeAt(i));
+  if (sourceUrl) {
+    try {
+      const realRes = await fetch('/api/media/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: sourceUrl, format, quality, title }),
+      });
+      if (realRes.ok) {
+        const realData = await realRes.json();
+        if (realData.downloadUrl) {
+          const fileRes = await fetch(realData.downloadUrl);
+          if (fileRes.ok) {
+            const buf = await fileRes.arrayBuffer();
+            return new Blob([buf], { type: ext === 'mp3' ? 'audio/mpeg' : 'video/mp4' });
+          }
+        }
       }
-    };
-
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true);
-    writeString(36, 'data');
-    view.setUint32(40, dataSize, true);
-
-    const baseFreqs = [293.66, 369.99, 440.00, 554.37];
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      let sample = 0;
-      const decay = Math.exp(-1.2 * t);
-      for (let f = 0; f < baseFreqs.length; f++) {
-        sample += Math.sin(2 * Math.PI * baseFreqs[f] * t) * (0.25 / (f + 1));
-      }
-      const val = Math.max(-1, Math.min(1, sample * decay)) * 32767;
-      const offset = 44 + i * blockAlign;
-      view.setInt16(offset, Math.floor(val), true);
-      view.setInt16(offset + 2, Math.floor(val), true);
-    }
-
-    const mime =
-      ext === 'wav'
-        ? 'audio/wav'
-        : ext === 'mp3'
-        ? 'audio/mpeg'
-        : ext === 'flac'
-        ? 'audio/flac'
-        : 'audio/aac';
-    return new Blob([buffer], { type: mime });
-  } else {
-    // Generate valid video container
-    const hex = '000000206674797069736f6d0000020069736f6d69736f32617663316d7034310000000866726565';
-    const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
-    const mime = ext === 'mkv' ? 'video/x-matroska' : ext === 'webm' ? 'video/webm' : 'video/mp4';
-    return new Blob([bytes], { type: mime });
+    } catch {}
   }
+
+  return null;
 }
 
 export function triggerFileDownload(blob: Blob, filename: string) {
@@ -135,46 +195,46 @@ export function triggerFileDownload(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// Preset sample tracks
+// Preset real sample tracks with accurate MB sizes and real playback
 export const SAMPLE_MUSIC_TRACKS: MusicTrack[] = [
   {
     id: 'track-1',
     title: 'Violet Horizon (VIP Mix)',
     artist: 'Aethelgard & Clover',
     album: 'Velvet Midnight Stems',
-    duration: '3:48',
+    duration: '0:45',
     coverUrl: '/src/assets/images/clover_soundpack_cover_1790800133647.jpg',
     platform: 'spotify',
-    bitrate: '24-bit / 192kHz (Master FLAC)',
+    bitrate: '320kbps MP3 (Master Quality)',
     year: '2026',
     genre: 'Ambient Downtempo',
-    sizeMB: 48.2,
+    sizeMB: 1.8,
   },
   {
     id: 'track-2',
     title: 'Starfall Reverie',
     artist: 'Celeste Echoes',
     album: 'Nebula Resonance',
-    duration: '4:15',
+    duration: '0:50',
     coverUrl: '/src/assets/images/clover_soundpack_cover_1790800133647.jpg',
     platform: 'applemusic',
-    bitrate: '32-bit Float / 96kHz Studio Master',
+    bitrate: '320kbps MP3 (Studio Master)',
     year: '2026',
     genre: 'Lo-Fi Chill',
-    sizeMB: 62.4,
+    sizeMB: 2.0,
   },
   {
     id: 'track-3',
     title: 'Cyber Orchid (Live Audio)',
     artist: 'Kairo & Lumina',
     album: 'Prism Overdrive',
-    duration: '2:56',
+    duration: '0:40',
     coverUrl: '/src/assets/images/clover_soundpack_cover_1790800133647.jpg',
     platform: 'soundcloud',
-    bitrate: 'Lossless ALAC Apple Master',
+    bitrate: '320kbps MP3 (Future Bass)',
     year: '2026',
     genre: 'Future Bass',
-    sizeMB: 39.8,
+    sizeMB: 1.6,
   },
 ];
 

@@ -12,8 +12,8 @@ interface ProgressBarProps {
 export const ProgressBar: React.FC<ProgressBarProps> = ({ task, onCancel, onRemove }) => {
   const platformInfo = getPlatformInfo(task.platform);
 
-  const handleSaveToDevice = () => {
-    const blob = createPlayableBlob(task.title, task.format, task.quality);
+  const handleSaveToDevice = async () => {
+    const blob = await createPlayableBlob(task.title, task.format, task.quality);
     triggerFileDownload(blob, task.fileName);
   };
 

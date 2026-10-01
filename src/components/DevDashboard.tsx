@@ -16,6 +16,8 @@ import {
   HardDrive,
   MessageSquare,
   Sparkles,
+  Trash2,
+  UserX,
 } from 'lucide-react';
 
 interface DevDashboardProps {
@@ -96,6 +98,34 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      const res = await fetch(`/api/dev/notes/${noteId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setNotes(data.notes);
+      }
+    } catch (e) {
+      console.error('Failed to delete note', e);
+    }
+  };
+
+  const handleBanUser = async (identifier: string, duration: '1h' | '24h' | '7d' | 'permanent') => {
+    if (!confirm(`Are you sure you want to ban @${identifier} (${duration})?`)) return;
+    try {
+      const res = await fetch('/api/dev/ban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, duration, reason: 'Moderation action by clover' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`User @${identifier} has been banned (${duration}).`);
+      }
+    } catch (e) {
+      console.error('Failed to ban user', e);
+    }
+  };
   const handleSendReply = async (noteId: string) => {
     const text = replyInputs[noteId]?.trim();
     if (!text) return;
@@ -137,7 +167,7 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">
+              <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight whitespace-nowrap">
                 Clover Downloader Dev Dashboard
               </h1>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
@@ -393,8 +423,8 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
                 </div>
               )}
 
-              {/* Reply Form for Clover */}
-              <div className="flex gap-2 pt-1">
+               {/* Reply Form for Clover */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <input
                   type="text"
                   value={replyInputs[note.id] || ''}
@@ -405,15 +435,57 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
                   className="flex-1 px-3.5 py-2 rounded-xl bg-[#110920] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
                 />
 
-                <button
-                  type="button"
-                  disabled={sendingReply === note.id || !replyInputs[note.id]?.trim()}
-                  onClick={() => handleSendReply(note.id)}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-purple-600/20"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{sendingReply === note.id ? 'Sending...' : 'Send Email Reply'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={sendingReply === note.id || !replyInputs[note.id]?.trim()}
+                    onClick={() => handleSendReply(note.id)}
+                    className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-purple-600/20"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{sendingReply === note.id ? 'Sending...' : 'Reply'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteNote(note.id)}
+                    title="Delete Comment"
+                    className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 text-xs transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      title="Ban User"
+                      className="p-2 rounded-xl bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 text-amber-300 text-xs transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <UserX className="w-4 h-4" />
+                    </button>
+
+                    <div className="absolute right-0 bottom-full mb-1 hidden group-hover:flex flex-col bg-[#160c2b] border border-purple-800/60 rounded-xl p-1.5 shadow-xl z-20 min-w-[120px] text-[11px]">
+                      <button
+                        onClick={() => handleBanUser(note.username, '1h')}
+                        className="px-2.5 py-1.5 text-left hover:bg-purple-900/50 rounded text-amber-300 cursor-pointer"
+                      >
+                        Ban 1 Hour
+                      </button>
+                      <button
+                        onClick={() => handleBanUser(note.username, '24h')}
+                        className="px-2.5 py-1.5 text-left hover:bg-purple-900/50 rounded text-amber-300 cursor-pointer"
+                      >
+                        Ban 24 Hours
+                      </button>
+                      <button
+                        onClick={() => handleBanUser(note.username, 'permanent')}
+                        className="px-2.5 py-1.5 text-left hover:bg-purple-900/50 rounded text-rose-400 font-semibold cursor-pointer"
+                      >
+                        Ban Permanent
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ))}

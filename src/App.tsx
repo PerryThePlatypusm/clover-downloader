@@ -4,6 +4,7 @@ import { AmbientBackground } from './components/AmbientBackground';
 import { Navbar } from './components/Navbar';
 import { SocialDownloader } from './components/SocialDownloader';
 import { MusicDownloader } from './components/MusicDownloader';
+import { StreamingDownloader } from './components/StreamingDownloader';
 import { DownloadsDrawer } from './components/DownloadsDrawer';
 import { AccountModal } from './components/AccountModal';
 import { DevGateCard } from './components/DevGateCard';
@@ -25,8 +26,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   const isAuthorizedClover =
-    currentUser?.username?.toLowerCase() === 'clover' ||
-    currentUser?.email?.toLowerCase() === 'jacobperry27@gmail.com';
+    currentUser?.username?.toLowerCase() === 'clover';
 
   // Load persistent user profile & set document title
   useEffect(() => {
@@ -132,6 +132,15 @@ export default function App() {
 
           {activeTab === 'music' && (
             <MusicDownloader
+              onStartDownload={handleStartDownload}
+              activeTasks={tasks}
+              onCancelTask={handleCancelTask}
+              onRemoveTask={handleRemoveTask}
+            />
+          )}
+
+          {activeTab === 'streaming' && (
+            <StreamingDownloader
               onStartDownload={handleStartDownload}
               activeTasks={tasks}
               onCancelTask={handleCancelTask}

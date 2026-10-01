@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { DownloadTask, DownloadFormat } from '../types';
-import { detectPlatform, getPlatformInfo, createPlayableBlob, triggerFileDownload } from '../utils/mediaUtils';
+import {
+  detectPlatform,
+  getPlatformInfo,
+  resolveMediaInfo,
+  startRealDownload,
+  triggerDirectDownload,
+  createPlayableBlob,
+  triggerFileDownload,
+} from '../utils/mediaUtils';
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
 import {
@@ -26,39 +34,32 @@ interface SocialDownloaderProps {
 
 const SAMPLE_URLS = [
   {
-    name: 'YouTube 8K Clip',
-    url: 'https://www.youtube.com/watch?v=clover_midnight_8k_hdr',
-    title: 'Clover Midnight Neon Metropolis — 8K 60fps HDR Master',
-    author: 'Clover Ultra Vision',
+    name: 'YouTube Classic Video',
+    url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw',
+    title: 'Me at the zoo',
+    author: 'jawed',
     platform: 'youtube' as const,
   },
   {
-    name: 'X / Twitter Video',
-    url: 'https://x.com/clover/status/1839201948291029',
-    title: 'Next-Gen Neural Audio Engine Breakthrough Demo',
-    author: '@clover_tech',
-    platform: 'twitter' as const,
+    name: 'Ultra HD Cinematic Sample',
+    url: 'https://filesamples.com/samples/video/mp4/sample_960x540.mp4',
+    title: 'Wild Earth High-Definition Sample',
+    author: 'Cinematic Media',
+    platform: 'other' as const,
   },
   {
-    name: 'TikTok Viral Beat',
-    url: 'https://www.tiktok.com/@soundwaves/video/739182910284',
-    title: 'Violet Waves (Ultra Bass Boosted 60fps)',
-    author: '@soundwaves_hq',
-    platform: 'tiktok' as const,
+    name: 'SoundCloud Master Track',
+    url: 'https://soundcloud.com/octobersveryown/drake-gods-plan',
+    title: 'Drake — God\'s Plan',
+    author: 'octobersveryown',
+    platform: 'soundcloud' as const,
   },
   {
-    name: 'Instagram Reel',
-    url: 'https://www.instagram.com/reel/C8921xkq19',
-    title: 'Aesthetic Tokyo Midnight Driving 4K 60fps',
-    author: 'Clover Visions',
-    platform: 'instagram' as const,
-  },
-  {
-    name: 'Reddit High-Bitrate',
-    url: 'https://www.reddit.com/r/sounddesign/comments/v819/cyber_audio',
-    title: 'Analog Modular Synth Soundscape — Raw Audio',
-    author: 'u/synth_architect',
-    platform: 'reddit' as const,
+    name: 'Open Animation 480p Reel',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm',
+    title: 'Big Buck Bunny 480p Animation Reel',
+    author: 'Blender Foundation',
+    platform: 'vimeo' as const,
   },
 ];
 
@@ -75,6 +76,9 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   const [containerFormat, setContainerFormat] = useState('mp4');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiInsight, setAiInsight] = useState<any>(null);
+
+  const [inputMode, setInputMode] = useState<'single' | 'batch'>('single');
+  const [batchInput, setBatchInput] = useState('');
 
   const detectedPlatform = detectPlatform(url);
   const platformInfo = getPlatformInfo(detectedPlatform);
@@ -107,83 +111,143 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     }
   };
 
-  const handleStartDownload = () => {
-    const targetUrl = url.trim() || SAMPLE_URLS[0].url;
-    const matchingSample = SAMPLE_URLS.find((s) => s.url === targetUrl);
+  const startDownloadForUrl = async (targetUrl: string) => {
+    if (!targetUrl.trim()) return;
+    const itemPlatform = detectPlatform(targetUrl);
+    const itemPlatformInfo = getPlatformInfo(itemPlatform);
 
-    const title = aiInsight?.title || matchingSample?.title || `${platformInfo.name} Media Stream`;
-    const author = aiInsight?.author || matchingSample?.author || 'Creator';
     const quality = format === 'mp4' || format === 'mkv' || format === 'webm' ? videoQuality : audioQuality;
-
-    const totalSizeMB =
-      format === 'mp4' || format === 'mkv' || format === 'webm'
-        ? videoQuality.includes('8K')
-          ? 320.5
-          : videoQuality.includes('4K')
-          ? 145.8
-          : videoQuality.includes('1440p')
-          ? 98.2
-          : videoQuality.includes('1080p')
-          ? 68.4
-          : 32.1
-        : audioQuality.includes('FLAC') || audioQuality.includes('WAV')
-        ? 45.0
-        : audioQuality.includes('320')
-        ? 14.8
-        : 9.6;
-
-    // 100% Free uncapped multi-stream speed
-    const baseSpeed = 120.0;
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const ext = format;
-    const cleanName = title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
-    const fileName = `clover_${cleanName}_${quality.replace(/\s+/g, '_').substring(0, 15)}.${ext}`;
+    const baseSpeed = 120.0;
+    const initialEstimatedSize = format === 'mp4' ? 35.0 : 8.5;
 
+    // Create the task immediately so the user sees instant feedback
     const newTask: DownloadTask = {
       id: taskId,
       url: targetUrl,
-      title,
-      author,
-      platform: detectedPlatform,
+      title: `${itemPlatformInfo.name} Media Stream`,
+      author: 'Resolving stream...',
+      platform: itemPlatform,
       format,
       quality,
-      progress: 0,
+      progress: 5,
       status: 'downloading',
-      speedMBs: baseSpeed + (Math.random() * 12 - 6),
-      totalSizeMB,
+      speedMBs: baseSpeed,
+      totalSizeMB: initialEstimatedSize,
       downloadedSizeMB: 0,
-      etaSeconds: totalSizeMB / baseSpeed,
+      etaSeconds: initialEstimatedSize / baseSpeed,
       createdAt: Date.now(),
-      fileName,
+      fileName: `media.${format}`,
     };
 
     onStartDownload(newTask);
 
-    let currentProgress = 0;
-    const intervalTime = 120;
-    const progressIncrement = (baseSpeed * (intervalTime / 1000) / totalSizeMB) * 100;
+    // Asynchronously resolve real metadata (e.g. exact YouTube video name)
+    let realTitle = `${itemPlatformInfo.name} Video`;
+    let realAuthor = 'Creator';
+    try {
+      const resolved = await resolveMediaInfo(targetUrl);
+      if (resolved.title) {
+        realTitle = resolved.title;
+        newTask.title = realTitle;
+      }
+      if (resolved.author) {
+        realAuthor = resolved.author;
+        newTask.author = realAuthor;
+      }
+      if (resolved.sizeMB) {
+        newTask.totalSizeMB = resolved.sizeMB;
+      }
+    } catch (e) {
+      console.warn('Info resolution error:', e);
+    }
 
-    const timer = setInterval(() => {
-      currentProgress += progressIncrement + Math.random() * 2;
-      if (currentProgress >= 95 && currentProgress < 100) {
-        newTask.status = 'processing';
-        newTask.progress = 96;
-      } else if (currentProgress >= 100) {
-        clearInterval(timer);
+    // Call server to fetch/convert actual media and get exact real file size and download URL
+    const downloadPromise = startRealDownload({
+      url: targetUrl,
+      format,
+      quality,
+      title: realTitle,
+    });
+
+    let currentProgress = 5;
+    const intervalTime = 120;
+    const timer = setInterval(async () => {
+      if (currentProgress < 90) {
+        currentProgress += Math.random() * 8 + 4;
+        newTask.progress = Math.min(90, Math.round(currentProgress));
+        newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
+        newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+      }
+    }, intervalTime);
+
+    try {
+      const result = await downloadPromise;
+      clearInterval(timer);
+
+      if (result.success && result.downloadUrl) {
+        const finalTitle = result.title || realTitle;
+        const cleanTitle = finalTitle.replace(/[\\/:*?"<>|]/g, '').trim() || 'video';
+        const finalFilename = result.filename || `${cleanTitle}.${format}`;
+
+        newTask.title = finalTitle;
+        newTask.fileName = finalFilename;
+        newTask.totalSizeMB = result.sizeMB;
+        newTask.downloadedSizeMB = result.sizeMB;
         newTask.progress = 100;
         newTask.status = 'completed';
-        newTask.downloadedSizeMB = newTask.totalSizeMB;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
 
-        const blob = createPlayableBlob(newTask.title, newTask.format, newTask.quality);
-        triggerFileDownload(blob, newTask.fileName);
+        // Trigger real file download directly to user's device
+        triggerDirectDownload(result.downloadUrl, finalFilename);
+
+        // Update dev stats with real size
+        fetch('/api/dev/track-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: itemPlatform,
+            format,
+            title: finalTitle,
+            sizeMB: result.sizeMB,
+          }),
+        }).catch(() => {});
       } else {
-        newTask.progress = currentProgress;
-        newTask.downloadedSizeMB = (currentProgress / 100) * totalSizeMB;
-        newTask.etaSeconds = Math.max(0.1, (totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+        newTask.status = 'error';
+        newTask.progress = 0;
+        newTask.speedMBs = 0;
+        newTask.etaSeconds = 0;
       }
-    }, intervalTime);
+    } catch (err) {
+      clearInterval(timer);
+      console.error('Download error:', err);
+      newTask.status = 'error';
+      newTask.progress = 0;
+      newTask.speedMBs = 0;
+      newTask.etaSeconds = 0;
+    }
+  };
+
+  const handleStartDownload = () => {
+    const targetUrl = url.trim();
+    if (!targetUrl) return;
+    startDownloadForUrl(targetUrl);
+  };
+
+  const handleQueueBatch = () => {
+    const urls = batchInput
+      .split('\n')
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0);
+
+    if (urls.length === 0) return;
+
+    urls.forEach((targetUrl) => {
+      startDownloadForUrl(targetUrl);
+    });
+
+    setBatchInput('');
   };
 
   return (
@@ -194,7 +258,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
           <Zap className="w-3.5 h-3.5 text-emerald-400" />
           <span>100% Free · Uncapped Speed · Accounts Aren't Needed</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mb-3">
+        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-3 whitespace-nowrap">
           Download any video or audio in <span className="bg-gradient-to-r from-purple-400 via-violet-300 to-indigo-300 bg-clip-text text-transparent">high fidelity</span>
         </h1>
         <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
@@ -204,49 +268,155 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
 
       {/* Main Downloader Input Box with Google AI Mode Style Moving Outer Glow */}
       <GlowBeamBox className="max-w-3xl mx-auto" innerClassName="p-5 sm:p-7">
-        {/* URL Input Form */}
-        <div className="relative mb-5">
-          <div className="relative flex items-center">
-            <div className="absolute left-4 pointer-events-none text-purple-400">
-              <Link2 className="w-5 h-5" />
+        {/* Mode Toggle Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setInputMode('single')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                inputMode === 'single'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'bg-[#1b1233] text-zinc-400 hover:text-white border border-purple-900/40'
+              }`}
+            >
+              Single Link Mode
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode('batch')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                inputMode === 'batch'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'bg-[#1b1233] text-zinc-400 hover:text-white border border-purple-900/40'
+              }`}
+            >
+              Batch Queue (Newline-Separated URLs)
+            </button>
+          </div>
+          <span className="text-[11px] text-purple-300 font-mono">
+            {inputMode === 'batch' ? 'Queue multiple URLs separated by newlines' : ''}
+          </span>
+        </div>
+
+        {/* URL Input Form (Single or Batch Textarea) */}
+        {inputMode === 'batch' ? (
+          <div className="space-y-3 mb-5">
+            <div className="relative">
+              <div className="absolute left-4 top-3.5 pointer-events-none text-purple-400">
+                <Link2 className="w-5 h-5" />
+              </div>
+              <textarea
+                rows={4}
+                value={batchInput}
+                onChange={(e) => setBatchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    handleQueueBatch();
+                  }
+                }}
+                placeholder="Paste multiple URLs here (one URL per line):\nhttps://www.youtube.com/watch?v=...\nhttps://www.tiktok.com/@user/video/...\nhttps://x.com/user/status/..."
+                className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+              />
             </div>
 
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste any link from YouTube, X, TikTok, Insta, Reddit, Twitch, Vimeo, etc..."
-              className="w-full pl-12 pr-28 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
-            />
+            {/* Live URL Validation Checklist */}
+            {batchInput.trim().length > 0 && (() => {
+              const isValidHttpUrl = (string: string) => {
+                try {
+                  const u = new URL(string);
+                  return u.protocol === 'http:' || u.protocol === 'https:';
+                } catch (_) {
+                  return false;
+                }
+              };
 
-            {/* Platform badge preview */}
-            <div className="absolute right-3 flex items-center gap-1.5">
-              <span
-                className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded text-white shadow-sm"
-                style={{ backgroundColor: platformInfo.color }}
-              >
-                {platformInfo.name}
-              </span>
+              const batchLines = batchInput
+                .split('\n')
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0);
+
+              const batchValidationResults = batchLines.map((line) => {
+                const valid = isValidHttpUrl(line);
+                const plat = valid ? detectPlatform(line) : 'other';
+                const platInfo = getPlatformInfo(plat);
+                return {
+                  line,
+                  valid: valid && plat !== 'other',
+                  platformName: platInfo.name,
+                };
+              });
+
+              return (
+                <div className="p-3 rounded-xl bg-[#140b24] border border-purple-900/40 space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-purple-300">
+                    Client-Side URL Analysis ({batchValidationResults.filter(r => r.valid).length}/{batchValidationResults.length} Valid):
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {batchValidationResults.map((res, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between text-xs p-2 rounded-lg border font-mono ${
+                          res.valid
+                            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                            : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                        }`}
+                      >
+                        <span className="truncate max-w-[260px] sm:max-w-md">{res.line}</span>
+                        <span className="shrink-0 font-semibold px-2 py-0.5 rounded text-[10px] uppercase">
+                          {res.valid ? `✓ Valid (${res.platformName})` : '✕ Invalid / Unsupported Link'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          <div className="relative mb-6">
+            <div className="relative flex items-center">
+              <div className="absolute left-4 pointer-events-none text-purple-400">
+                <Link2 className="w-5 h-5" />
+              </div>
+
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleStartDownload();
+                  }
+                }}
+                placeholder="Paste any link from YouTube, X, TikTok, Insta, etc..."
+                className="w-full pl-12 pr-44 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+              />
+
+              {/* Direct Quick Download & Platform badge */}
+              <div className="absolute right-2 flex items-center gap-1.5">
+                <span
+                  className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded text-white shadow-sm hidden sm:inline-block"
+                  style={{ backgroundColor: platformInfo.color }}
+                >
+                  {platformInfo.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleStartDownload}
+                  disabled={!url.trim()}
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Press Enter or click to download"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Quick Sample Links */}
-        <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-zinc-500">Quick test:</span>
-          {SAMPLE_URLS.map((sample) => (
-            <button
-              key={sample.name}
-              onClick={() => {
-                setUrl(sample.url);
-                setAiInsight(null);
-              }}
-              className="px-2.5 py-1 rounded-md bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 hover:text-white border border-purple-900/30 transition-colors cursor-pointer"
-            >
-              {sample.name}
-            </button>
-          ))}
-        </div>
+        )}
 
         {/* Format & Quality Settings Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#17102d] border border-purple-900/30 mb-6">
@@ -326,10 +496,10 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <button
-            onClick={handleStartDownload}
+            onClick={inputMode === 'batch' ? handleQueueBatch : handleStartDownload}
             className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:via-violet-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-purple-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 group cursor-pointer"
           >
-            <span>Start Fast Download</span>
+            <span>{inputMode === 'batch' ? 'Download All' : 'Download'}</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
 
