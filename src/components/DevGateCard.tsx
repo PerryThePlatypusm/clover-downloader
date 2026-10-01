@@ -113,8 +113,8 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
     <GlowBeamBox className="max-w-md mx-auto my-12" innerClassName="p-6 sm:p-8">
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-xl shadow-lg shadow-purple-600/30">
-            🍀
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-2xl shadow-lg shadow-purple-600/30">
+            🐱
           </div>
           <div>
             <div className="flex items-center gap-2">

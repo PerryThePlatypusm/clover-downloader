@@ -162,20 +162,34 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
       {/* Dev Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-[#170e2f] to-[#120a22] border border-purple-800/40 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-purple-600/30">
-            🍀
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-600/30 overflow-hidden p-2">
+            <svg viewBox="0 0 32 32" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+              <rect x="8" y="14" width="16" height="10" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <rect x="18" y="8" width="10" height="10" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="19,8 21,3 23,8" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="20,7 21,5 22,7" fill="#ffb6c1"/>
+              <polygon points="25,9 27,4 29,9" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="26,8 27,6 28,8" fill="#ffb6c1"/>
+              <rect x="20" y="11" width="1.5" height="1.5" fill="#5c4538"/>
+              <rect x="26" y="11" width="1.5" height="1.5" fill="#5c4538"/>
+              <rect x="21" y="13" width="2" height="1.5" fill="#ffb6c1"/>
+              <rect x="20" y="13" width="2" height="2" fill="#ffb6c1" opacity="0.6"/>
+              <rect x="25" y="13" width="2" height="2" fill="#ffb6c1" opacity="0.6"/>
+              <rect x="15" y="21" width="4" height="3" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <rect x="4" y="16" width="5" height="3" rx="1.5" fill="white" stroke="#5c4538" strokeWidth="1"/>
+            </svg>
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight whitespace-nowrap">
-                Clover Downloader Dev Dashboard
+                Dev Dashboard
               </h1>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
                 Dev Admin
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              Welcome back, <strong>@{currentUser.username}</strong> · 2FA Authenticated Workspace
+              Welcome back, <strong>@{currentUser.username}</strong>
             </p>
           </div>
         </div>

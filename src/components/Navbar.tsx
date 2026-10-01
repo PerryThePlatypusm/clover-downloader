@@ -36,8 +36,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => setActiveTab('social')}
           className="flex items-center gap-2 text-left group focus:outline-none cursor-pointer mr-6 sm:mr-8 shrink-0"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#9d4edd] to-[#6b21a8] flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform duration-300 ease-out">
-            <span className="text-emerald-300 font-bold text-base leading-none">🍀</span>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#9d4edd] to-[#6b21a8] flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform duration-300 ease-out overflow-hidden p-1.5 animate-pulse">
+            <svg viewBox="0 0 32 32" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+              <rect x="8" y="14" width="16" height="10" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <rect x="18" y="8" width="10" height="10" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="19,8 21,3 23,8" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="20,7 21,5 22,7" fill="#ffb6c1"/>
+              <polygon points="25,9 27,4 29,9" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <polygon points="26,8 27,6 28,8" fill="#ffb6c1"/>
+              <rect x="20" y="11" width="1.5" height="1.5" fill="#5c4538"/>
+              <rect x="26" y="11" width="1.5" height="1.5" fill="#5c4538"/>
+              <rect x="21" y="13" width="2" height="1.5" fill="#ffb6c1"/>
+              <rect x="20" y="13" width="2" height="2" fill="#ffb6c1" opacity="0.6"/>
+              <rect x="25" y="13" width="2" height="2" fill="#ffb6c1" opacity="0.6"/>
+              <rect x="15" y="21" width="4" height="3" fill="white" stroke="#5c4538" strokeWidth="1"/>
+              <rect x="4" y="16" width="5" height="3" rx="1.5" fill="white" stroke="#5c4538" strokeWidth="1"/>
+            </svg>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-display text-sm sm:text-[15px] font-bold tracking-tight text-white group-hover:text-purple-200 transition-colors duration-200 whitespace-nowrap">

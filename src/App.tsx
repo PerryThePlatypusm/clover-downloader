@@ -5,6 +5,8 @@ import { Navbar } from './components/Navbar';
 import { DownloadsDrawer } from './components/DownloadsDrawer';
 import { AccountModal } from './components/AccountModal';
 import { Footer } from './components/Footer';
+import { CursorCat } from './components/CursorCat';
+import { CatDownloadReaction } from './components/CatDownloadReaction';
 
 const SocialDownloader = lazy(() => import('./components/SocialDownloader').then(m => ({ default: m.SocialDownloader })));
 const MusicDownloader = lazy(() => import('./components/MusicDownloader').then(m => ({ default: m.MusicDownloader })));
@@ -25,6 +27,7 @@ export default function App() {
   const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [completedDownloadTitle, setCompletedDownloadTitle] = useState<string | null>(null);
 
   const isAuthorizedClover =
     currentUser?.username?.toLowerCase() === 'clover';
@@ -85,7 +88,13 @@ export default function App() {
   };
 
   const handleUpdateTask = (updatedTask: DownloadTask) => {
-    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? { ...updatedTask } : t)));
+    setTasks((prev) => {
+      const old = prev.find((t) => t.id === updatedTask.id);
+      if (old && old.status !== 'completed' && updatedTask.status === 'completed') {
+        setCompletedDownloadTitle(updatedTask.title);
+      }
+      return prev.map((t) => (t.id === updatedTask.id ? { ...updatedTask } : t));
+    });
   };
 
   const handleCancelTask = (id: string) => {
@@ -108,6 +117,14 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen flex flex-col text-[#eae5f8] selection:bg-purple-600/30 selection:text-purple-200">
+      <CursorCat />
+      {completedDownloadTitle && (
+        <CatDownloadReaction
+          title={completedDownloadTitle}
+          onClose={() => setCompletedDownloadTitle(null)}
+        />
+      )}
+
       {/* Ambient glowing purple background */}
       <AmbientBackground />
 
