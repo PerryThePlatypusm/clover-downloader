@@ -1673,6 +1673,32 @@ let devNotes: DevNote[] = [];
 // Banned users store: identifier -> { expiresAt: number | 'permanent', reason: string }
 let bannedUsers: Record<string, { expiresAt: number | 'permanent'; reason: string }> = {};
 
+const DATA_FILE = './dev_storage.json';
+
+function loadDevData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.devDownloads)) devDownloads = data.devDownloads;
+      if (Array.isArray(data.devNotes)) devNotes = data.devNotes;
+      if (data.bannedUsers && typeof data.bannedUsers === 'object') bannedUsers = data.bannedUsers;
+    }
+  } catch (e) {
+    console.warn('Failed to load dev storage:', e);
+  }
+}
+
+function saveDevData() {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ devDownloads, devNotes, bannedUsers }, null, 2));
+  } catch (e) {
+    console.warn('Failed to save dev storage:', e);
+  }
+}
+
+loadDevData();
+
 // Active temporary 2FA verification session
 let activeDev2FA: { code: string; expiresAt: number } | null = null;
 
@@ -1748,6 +1774,7 @@ app.post('/api/dev/ban', (req, res) => {
     expiresAt,
     reason: reason || 'Violation of community guidelines',
   };
+  saveDevData();
 
   console.log(`[USER BANNED] Identifier: ${identifier} | Duration: ${duration}`);
   return res.json({ success: true, bannedUsers });
@@ -1757,6 +1784,7 @@ app.post('/api/dev/ban', (req, res) => {
 app.delete('/api/dev/notes/:id', (req, res) => {
   const { id } = req.params;
   devNotes = devNotes.filter((n) => n.id !== id);
+  saveDevData();
   return res.json({ success: true, notes: devNotes });
 });
 
@@ -1812,6 +1840,7 @@ app.post('/api/dev/track-download', (req, res) => {
   };
 
   devDownloads.unshift(newRecord);
+  saveDevData();
   return res.json({ success: true, record: newRecord });
 });
 
@@ -1853,6 +1882,7 @@ app.post('/api/dev/notes', (req, res) => {
   };
 
   devNotes.unshift(newNote);
+  saveDevData();
   return res.json({ success: true, note: newNote });
 });
 
@@ -1876,6 +1906,7 @@ app.post('/api/dev/reply-note', (req, res) => {
   };
 
   note.reply = replyData;
+  saveDevData();
 
   // Log simulated email dispatch
   console.log(`[EMAIL DISPATCHED] From: ${senderDisplayName} <${senderEmail}> To: ${note.email} | Subject: Reply to your Clover Downloader Note | Message: ${replyText}`);

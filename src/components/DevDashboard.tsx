@@ -71,9 +71,9 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
   const [sendingReply, setSendingReply] = useState<string | null>(null);
   const [emailReceipts, setEmailReceipts] = useState<Record<string, any>>({});
 
-  const fetchDevData = async () => {
+  const fetchDevData = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       const [statsRes, notesRes] = await Promise.all([
         fetch('/api/dev/stats').then((r) => r.json()),
         fetch('/api/dev/notes').then((r) => r.json()),
@@ -88,13 +88,13 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
     } catch (e) {
       console.error('Error fetching dev data', e);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDevData();
-    const interval = setInterval(fetchDevData, 3000); // live sync every 3s
+    fetchDevData(true);
+    const interval = setInterval(() => fetchDevData(false), 3000); // live sync every 3s without flashing
     return () => clearInterval(interval);
   }, []);
 
@@ -196,7 +196,7 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchDevData}
+            onClick={() => fetchDevData(false)}
             title="Refresh Live Analytics"
             className="p-2.5 rounded-xl bg-[#20143d] hover:bg-[#2c1b54] border border-purple-800/40 text-purple-200 text-xs transition-colors cursor-pointer"
           >

@@ -162,7 +162,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
 
     let progress = 0;
     const interval = setInterval(() => {
-      progress += (baseSpeed / track.sizeMB) * 14 + Math.random() * 3;
+      progress += (baseSpeed / track.sizeMB) * 28 + Math.random() * 6;
       if (progress >= 95 && progress < 100) {
         newTask.status = 'processing';
         newTask.progress = 96;
@@ -194,7 +194,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         newTask.etaSeconds = Math.max(0.1, (track.sizeMB - newTask.downloadedSizeMB) / baseSpeed);
         if (onUpdateTask) onUpdateTask({ ...newTask });
       }
-    }, 120);
+    }, 60);
   };
 
   const handleDirectMusicDownload = async () => {
@@ -284,16 +284,16 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       title: realTitle,
     });
 
-    let currentProgress = 5;
+    let currentProgress = 10;
     const interval = setInterval(() => {
       if (currentProgress < 90) {
-        currentProgress += Math.random() * 8 + 4;
+        currentProgress += Math.random() * 14 + 8;
         newTask.progress = Math.min(90, Math.round(currentProgress));
         newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
         if (onUpdateTask) onUpdateTask({ ...newTask });
       }
-    }, 120);
+    }, 60);
 
     try {
       const result = await downloadPromise;

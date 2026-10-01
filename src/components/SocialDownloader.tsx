@@ -161,11 +161,11 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
       title: realTitle,
     });
 
-    let currentProgress = 5;
-    const intervalTime = 120;
+    let currentProgress = 10;
+    const intervalTime = 60;
     const timer = setInterval(async () => {
       if (currentProgress < 90) {
-        currentProgress += Math.random() * 8 + 4;
+        currentProgress += Math.random() * 14 + 8;
         newTask.progress = Math.min(90, Math.round(currentProgress));
         newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
