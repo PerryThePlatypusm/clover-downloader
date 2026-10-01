@@ -93,27 +93,55 @@
 
 .ambient-orb-1 {
   animation: fluidOrb1 20s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 .ambient-orb-2 {
   animation: fluidOrb2 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 .ambient-orb-3 {
   animation: fluidOrb3 22s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 .ambient-orb-4 {
   animation: fluidOrb4 26s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 .ambient-wave {
   animation: subtleWave 12s ease-in-out infinite alternate;
+  will-change: opacity, transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
-/* Page Transition Smooth Entrance */
+/* Page Transition Smooth Entrance & Mobile Hardware Acceleration */
 .page-enter {
   animation: pageTransition 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+body, main, header, footer {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: opacity;
 }
 
 @keyframes pageTransition {

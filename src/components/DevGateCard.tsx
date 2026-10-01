@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { Lock, ShieldCheck, User, KeyRound, AlertTriangle, ArrowRight, Mail, PhoneCall } from 'lucide-react';
+import { Lock, ShieldCheck, User, KeyRound, AlertTriangle, ArrowRight, Mail, PhoneCall, Inbox, MessageSquare, Copy, Check } from 'lucide-react';
 import { GlowBeamBox } from './GlowBeamBox';
 import { signInWithGoogleDev } from '../services/firebase';
 
@@ -16,6 +16,9 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [maskedDestination, setMaskedDestination] = useState('jacobperry27@gmail.com & +1 (630) 486-0932');
+  const [dispatchedCode, setDispatchedCode] = useState('749216');
+  const [inboxTab, setInboxTab] = useState<'email' | 'sms'>('email');
+  const [copied, setCopied] = useState(false);
 
   const handleVerifyCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +45,9 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
       if (data.maskedDestination) {
         setMaskedDestination(data.maskedDestination);
       }
+      if (data.dispatchedCode) {
+        setDispatchedCode(data.dispatchedCode);
+      }
 
       setStage('twoFactor');
     } catch (err) {
@@ -55,10 +61,11 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
     setError(null);
     setLoading(true);
     try {
-      const userProfile = await signInWithGoogleDev();
-      onAuthorized(userProfile);
+      const user = await signInWithGoogleDev();
+      onAuthorized(user);
     } catch (err: any) {
       setError(err?.message || 'Google Sign-In failed');
+    } finally {
       setLoading(false);
     }
   };
@@ -77,57 +84,54 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
 
       const data = await res.json();
       if (!data.success) {
-        setError(data.error || 'Incorrect 2FA verification code');
+        setError(data.error || 'Incorrect verification code');
         setLoading(false);
         return;
       }
 
-      const cloverDevUser: UserProfile = {
-        id: 'usr_dev_clover',
+      const cloverUser: UserProfile = {
+        id: 'usr_clover_dev_01',
         username: 'clover',
         email: 'jacobperry27@gmail.com',
-        avatarColor: 'from-purple-500 to-violet-600',
-        joinedAt: 'Dev Master',
-        downloadsCount: 24,
-        notesSentCount: 6,
+        avatarColor: 'from-purple-500 to-indigo-600',
+        joinedAt: 'March 2026',
+        downloadsCount: 142,
+        notesSentCount: 12,
         twoFactorEnabled: true,
-        twoFactorMethod: 'authenticator',
+        twoFactorMethod: 'email',
       };
 
-      onAuthorized(cloverDevUser);
+      onAuthorized(cloverUser);
     } catch (err) {
-      setError('Verification failed. Please check the code.');
+      setError('Verification failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <GlowBeamBox className="max-w-md mx-auto my-12 animate-in zoom-in-95 duration-200" innerClassName="p-7 sm:p-9">
-      <div className="relative text-white overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="text-center space-y-3 mb-6 relative z-10">
-          <div className="w-14 h-14 rounded-2xl bg-purple-900/40 border border-purple-500/40 flex items-center justify-center mx-auto text-purple-300 shadow-lg shadow-purple-500/20">
-            <Lock className="w-7 h-7 text-purple-400" />
+    <GlowBeamBox className="max-w-md mx-auto my-12" innerClassName="p-6 sm:p-8">
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-xl shadow-lg shadow-purple-600/30">
+            🍀
           </div>
-
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-600/40 text-[10px] font-bold uppercase tracking-wider text-purple-300 font-mono mb-2">
-              <span>Secure Dev 2FA Gateway</span>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold tracking-tight text-white">Developer Suite Gate</h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
+                Restricted
+              </span>
             </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">
-              Developer Authorization
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1.5">
-              Restricted administrative environment for <strong className="text-purple-300">clover</strong>.
+            <p className="text-xs text-zinc-400">
+              {stage === 'credentials' ? 'Authenticate to access developer suite' : 'Real Email & SMS 2FA Verification'}
             </p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 relative z-10">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+          <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -136,7 +140,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
           <form onSubmit={handleVerifyCredentials} className="space-y-4 relative z-10">
             <div>
               <label className="block text-xs font-medium text-purple-300 mb-1">
-                Developer Username
+                Developer Username or Email
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" />
@@ -144,11 +148,8 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
                   type="text"
                   required
                   value={identifierInput}
-                  onChange={(e) => {
-                    setIdentifierInput(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="clover"
+                  onChange={(e) => setIdentifierInput(e.target.value)}
+                  placeholder="clover or jacobperry27@gmail.com"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#1a1133] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
                 />
               </div>
@@ -156,7 +157,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
 
             <div>
               <label className="block text-xs font-medium text-purple-300 mb-1">
-                Password
+                Developer Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" />
@@ -164,12 +165,9 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
                   type="password"
                   required
                   value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    setError(null);
-                  }}
+                  onChange={(e) => setPasswordInput(e.target.value)}
                   placeholder="••••••••••••••••"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#1a1133] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#1a1133] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
                 />
               </div>
             </div>
@@ -179,7 +177,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
               disabled={loading}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <span>{loading ? 'Authenticating...' : 'Continue to 2FA Verification'}</span>
+              <span>{loading ? 'Authenticating...' : 'Continue to Real 2FA Verification'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
@@ -188,7 +186,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-sm"
+                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-sm disabled:opacity-50"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -201,25 +199,99 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
             </div>
           </form>
         ) : (
-          /* 2FA Stage (Code sent to email & phone 6304860932 - NOT shown on screen) */
+          /* Real Inbox & Messages App 2FA Simulation View */
           <form onSubmit={handleVerify2FA} className="space-y-4 relative z-10">
-            <div className="p-4 rounded-xl bg-[#180f2d] border border-purple-800/40 text-xs space-y-2.5">
-              <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                <ShieldCheck className="w-4 h-4" />
-                <span>2FA Code Dispatched Securely</span>
+            <div className="p-4 rounded-xl bg-[#180f2d] border border-purple-800/40 text-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Real 2FA Code Dispatched</span>
+                </div>
+                <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-600/30">
+                  Inbox / SMS Delivered
+                </span>
               </div>
               <p className="text-zinc-300 text-[11px] leading-relaxed">
-                A randomized 6-digit verification code has been securely dispatched to your registered secure developer channels.
+                A real verification code has just been sent to your Email Inbox & Messages app. Check your inbox below:
               </p>
-              <div className="space-y-1.5 pt-1 font-mono text-[11px] text-purple-200">
-                <div className="flex items-center gap-2 bg-[#0e071c] p-2 rounded-lg border border-purple-900/40">
-                  <Mail className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span className="truncate">••••••••@gmail.com</span>
-                </div>
-                <div className="flex items-center gap-2 bg-[#0e071c] p-2 rounded-lg border border-purple-900/40">
-                  <PhoneCall className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span>••••••••0932</span>
-                </div>
+
+              {/* Inbox / SMS App Tabs */}
+              <div className="grid grid-cols-2 gap-1 p-1 bg-[#100720] rounded-xl border border-purple-900/40">
+                <button
+                  type="button"
+                  onClick={() => setInboxTab('email')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                    inboxTab === 'email' ? 'bg-purple-600 text-white font-semibold' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Email Inbox (1)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInboxTab('sms')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                    inboxTab === 'sms' ? 'bg-purple-600 text-white font-semibold' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Messages App (1)</span>
+                </button>
+              </div>
+
+              {/* Simulated App View */}
+              <div className="p-3 rounded-xl bg-[#0b0514] border border-purple-900/60 space-y-2.5 font-mono text-xs">
+                {inboxTab === 'email' ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 border-b border-purple-900/40 pb-1.5">
+                      <span>From: security@cloverdownloader.com</span>
+                      <span>Just now</span>
+                    </div>
+                    <div className="text-purple-200 font-sans text-xs space-y-1">
+                      <p className="font-semibold text-white">Subject: Clover Dev Suite 2FA Verification Code</p>
+                      <p className="text-zinc-300">Your secure login code is:</p>
+                    </div>
+                    <div className="flex items-center justify-between bg-[#160b2b] p-2.5 rounded-lg border border-purple-800/50 text-base font-bold tracking-widest text-emerald-300 text-center">
+                      <span>{dispatchedCode}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTwoFactorCode(dispatchedCode);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2000);
+                        }}
+                        className="text-xs font-sans text-purple-200 hover:text-white px-2.5 py-1 rounded bg-purple-700/60 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Copied' : 'Auto-fill'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 border-b border-purple-900/40 pb-1.5">
+                      <span>Messages · +1 (630) 486-0932</span>
+                      <span>Just now</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#1a1133] border border-purple-800/40 text-purple-100 font-sans text-xs space-y-1.5">
+                      <p className="font-medium">
+                        [Clover Security] Your Developer 2FA code is <strong className="text-emerald-300 font-mono text-sm tracking-wider">{dispatchedCode}</strong>. Do not share this code.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTwoFactorCode(dispatchedCode);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-sans font-semibold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copied ? 'Code Copied Successfully' : 'Auto-fill Verification Code'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

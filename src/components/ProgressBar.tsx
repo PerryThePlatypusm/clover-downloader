@@ -116,8 +116,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ task, onCancel, onRemo
           </span>
           {task.status === 'downloading' && (
             <>
-              <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:flex items-center gap-1 text-emerald-400">
+              <span>·</span>
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">
                 <ArrowDown className="w-3 h-3 animate-bounce" />
                 {task.speedMBs.toFixed(1)} MB/s
               </span>

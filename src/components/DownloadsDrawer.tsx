@@ -1,7 +1,7 @@
 import React from 'react';
 import { DownloadTask } from '../types';
 import { ProgressBar } from './ProgressBar';
-import { X, ArrowDownToLine, Trash2 } from 'lucide-react';
+import { X, ArrowDownToLine, Trash2, FileDown } from 'lucide-react';
 
 interface DownloadsDrawerProps {
   isOpen: boolean;
@@ -24,6 +24,16 @@ export const DownloadsDrawer: React.FC<DownloadsDrawerProps> = ({
 
   const activeCount = tasks.filter((t) => t.status === 'downloading' || t.status === 'processing').length;
 
+  const handleExportHistory = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `clover_download_history_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -42,15 +52,24 @@ export const DownloadsDrawer: React.FC<DownloadsDrawerProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {tasks.length > 0 && (
-                <button
-                  onClick={onClearAll}
-                  className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-purple-950/40 transition-colors"
-                  title="Clear Finished"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <>
+                  <button
+                    onClick={handleExportHistory}
+                    className="p-1.5 text-zinc-400 hover:text-purple-300 rounded-lg hover:bg-purple-950/40 transition-colors"
+                    title="Export History JSON"
+                  >
+                    <FileDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={onClearAll}
+                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-purple-950/40 transition-colors"
+                    title="Clear Finished"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
               )}
               <button
                 onClick={onClose}
