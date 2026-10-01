@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { TabType, DownloadTask, UserProfile } from './types';
 import { AmbientBackground } from './components/AmbientBackground';
 import { Navbar } from './components/Navbar';
-import { SocialDownloader } from './components/SocialDownloader';
-import { MusicDownloader } from './components/MusicDownloader';
-import { StreamingDownloader } from './components/StreamingDownloader';
 import { DownloadsDrawer } from './components/DownloadsDrawer';
 import { AccountModal } from './components/AccountModal';
-import { DevGateCard } from './components/DevGateCard';
-import { DevDashboard } from './components/DevDashboard';
-import { CreditsPage } from './components/CreditsPage';
 import { Footer } from './components/Footer';
+
+const SocialDownloader = lazy(() => import('./components/SocialDownloader').then(m => ({ default: m.SocialDownloader })));
+const MusicDownloader = lazy(() => import('./components/MusicDownloader').then(m => ({ default: m.MusicDownloader })));
+const StreamingDownloader = lazy(() => import('./components/StreamingDownloader').then(m => ({ default: m.StreamingDownloader })));
+const CreditsPage = lazy(() => import('./components/CreditsPage').then(m => ({ default: m.CreditsPage })));
+const DevGateCard = lazy(() => import('./components/DevGateCard').then(m => ({ default: m.DevGateCard })));
+const DevDashboard = lazy(() => import('./components/DevDashboard').then(m => ({ default: m.DevDashboard })));
 
 export default function App() {
   const isDevSite =
@@ -118,63 +119,72 @@ export default function App() {
         onOpenDevDashboard={() => setActiveTab('dev')}
       />
 
-      {/* Main Content View with Separate Dev Page and Smooth Page Transitions */}
+      {/* Main Content View with Code Splitting & Suspense Lazy Loading */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 relative z-10">
-        <div key={activeTab} className="page-enter">
-          {activeTab === 'social' && (
-            <SocialDownloader
-              onStartDownload={handleStartDownload}
-              activeTasks={tasks}
-              onCancelTask={handleCancelTask}
-              onRemoveTask={handleRemoveTask}
-            />
-          )}
-
-          {activeTab === 'music' && (
-            <MusicDownloader
-              onStartDownload={handleStartDownload}
-              activeTasks={tasks}
-              onCancelTask={handleCancelTask}
-              onRemoveTask={handleRemoveTask}
-            />
-          )}
-
-          {activeTab === 'streaming' && (
-            <StreamingDownloader
-              onStartDownload={handleStartDownload}
-              activeTasks={tasks}
-              onCancelTask={handleCancelTask}
-              onRemoveTask={handleRemoveTask}
-            />
-          )}
-
-          {activeTab === 'credits' && (
-            <CreditsPage
-              currentUser={currentUser}
-              onOpenAccountModal={() => setIsAccountModalOpen(true)}
-              onNoteSent={handleNoteSent}
-            />
-          )}
-
-          {/* Separate Dev Suite Page */}
-          {activeTab === 'dev' && (
-            isAuthorizedClover ? (
-              <DevDashboard
-                currentUser={currentUser!}
-                onLogout={handleLogout}
-                onSwitchToLivePreview={() => setActiveTab('social')}
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-32">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+              <span className="text-xs text-purple-300 font-mono tracking-wider">Loading Cloverspace...</span>
+            </div>
+          </div>
+        }>
+          <div key={activeTab} className="page-enter">
+            {activeTab === 'social' && (
+              <SocialDownloader
+                onStartDownload={handleStartDownload}
+                activeTasks={tasks}
+                onCancelTask={handleCancelTask}
+                onRemoveTask={handleRemoveTask}
               />
-            ) : (
-              <DevGateCard onAuthorized={handleLogin} />
-            )
-          )}
-        </div>
+            )}
+
+            {activeTab === 'music' && (
+              <MusicDownloader
+                onStartDownload={handleStartDownload}
+                activeTasks={tasks}
+                onCancelTask={handleCancelTask}
+                onRemoveTask={handleRemoveTask}
+              />
+            )}
+
+            {activeTab === 'streaming' && (
+              <StreamingDownloader
+                onStartDownload={handleStartDownload}
+                activeTasks={tasks}
+                onCancelTask={handleCancelTask}
+                onRemoveTask={handleRemoveTask}
+              />
+            )}
+
+            {activeTab === 'credits' && (
+              <CreditsPage
+                currentUser={currentUser}
+                onOpenAccountModal={() => setIsAccountModalOpen(true)}
+                onNoteSent={handleNoteSent}
+              />
+            )}
+
+            {/* Separate Dev Suite Page */}
+            {activeTab === 'dev' && (
+              isAuthorizedClover ? (
+                <DevDashboard
+                  currentUser={currentUser!}
+                  onLogout={handleLogout}
+                  onSwitchToLivePreview={() => setActiveTab('social')}
+                />
+              ) : (
+                <DevGateCard onAuthorized={handleLogin} />
+              )
+            )}
+          </div>
+        </Suspense>
       </main>
 
       {/* Footer */}
       <Footer setActiveTab={setActiveTab} />
 
-      {/* Downloads Queue Drawer */}
+      {/* Slide-out active downloads task list drawer */}
       <DownloadsDrawer
         isOpen={isDownloadsOpen}
         onClose={() => setIsDownloadsOpen(false)}
@@ -184,7 +194,7 @@ export default function App() {
         onClearAll={handleClearAllTasks}
       />
 
-      {/* Account Modal for Public Users */}
+      {/* Account / 2FA / Profile modal */}
       <AccountModal
         isOpen={isAccountModalOpen}
         onClose={() => setIsAccountModalOpen(false)}
