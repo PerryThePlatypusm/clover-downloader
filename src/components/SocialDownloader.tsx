@@ -12,6 +12,7 @@ import {
 } from '../utils/mediaUtils';
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
+import { PullToRefreshContainer } from './PullToRefreshContainer';
 import {
   Link2,
   Sparkles,
@@ -269,8 +270,16 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     setBatchInput('');
   };
 
+  const handleReset = () => {
+    setUrl('');
+    setBatchInput('');
+    setAiInsight(null);
+    setValidationError(null);
+  };
+
   return (
-    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full">
+    <PullToRefreshContainer onRefresh={handleReset}>
+      <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full">
       {/* Hero Section */}
       <div className="text-center max-w-2xl mx-auto pt-4 sm:pt-6 pb-2 px-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[11px] sm:text-xs font-semibold text-emerald-300 mb-3">
@@ -678,6 +687,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
           <span>Downloads from 1,000 plus sites</span>
         </div>
       </div>
-    </div>
+      </div>
+    </PullToRefreshContainer>
   );
 };

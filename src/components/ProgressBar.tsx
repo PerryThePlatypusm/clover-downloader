@@ -102,14 +102,32 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ task, onCancel, onRemo
               ? 'bg-rose-500'
               : 'bg-gradient-to-r from-purple-500 via-indigo-500 to-violet-400'
           }`}
-          style={{ width: `${Math.min(100, Math.max(2, task.progress))}%` }}
+          style={{
+            width: `${Math.min(
+              100,
+              Math.max(
+                2,
+                task.status === 'completed'
+                  ? 100
+                  : (task.downloadedSizeMB / Math.max(0.1, task.totalSizeMB)) * 100
+              )
+            )}%`,
+          }}
         />
       </div>
 
       {/* Bottom stats row */}
       <div className="flex items-center justify-between text-xs text-zinc-400 font-mono tabular-nums">
         <div className="flex items-center gap-3">
-          <span className="text-purple-300 font-semibold">{task.progress.toFixed(0)}%</span>
+          <span className="text-purple-300 font-semibold">
+            {Math.min(
+              100,
+              task.status === 'completed'
+                ? 100
+                : (task.downloadedSizeMB / Math.max(0.1, task.totalSizeMB)) * 100
+            ).toFixed(0)}
+            %
+          </span>
           <span>·</span>
           <span>
             {task.downloadedSizeMB.toFixed(1)} MB / {task.totalSizeMB.toFixed(1)} MB
