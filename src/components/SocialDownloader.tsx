@@ -8,6 +8,7 @@ import {
   triggerDirectDownload,
   createPlayableBlob,
   triggerFileDownload,
+  autoSelectBestFormat,
 } from '../utils/mediaUtils';
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
@@ -23,6 +24,8 @@ import {
   Globe,
   Radio,
   Share2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 
 interface SocialDownloaderProps {
@@ -31,37 +34,6 @@ interface SocialDownloaderProps {
   onCancelTask: (id: string) => void;
   onRemoveTask: (id: string) => void;
 }
-
-const SAMPLE_URLS = [
-  {
-    name: 'YouTube Classic Video',
-    url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw',
-    title: 'Me at the zoo',
-    author: 'jawed',
-    platform: 'youtube' as const,
-  },
-  {
-    name: 'Ultra HD Cinematic Sample',
-    url: 'https://filesamples.com/samples/video/mp4/sample_960x540.mp4',
-    title: 'Wild Earth High-Definition Sample',
-    author: 'Cinematic Media',
-    platform: 'other' as const,
-  },
-  {
-    name: 'SoundCloud Master Track',
-    url: 'https://soundcloud.com/octobersveryown/drake-gods-plan',
-    title: 'Drake — God\'s Plan',
-    author: 'octobersveryown',
-    platform: 'soundcloud' as const,
-  },
-  {
-    name: 'Open Animation 480p Reel',
-    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm',
-    title: 'Big Buck Bunny 480p Animation Reel',
-    author: 'Blender Foundation',
-    platform: 'vimeo' as const,
-  },
-];
 
 export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   onStartDownload,
@@ -76,9 +48,26 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   const [containerFormat, setContainerFormat] = useState('mp4');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiInsight, setAiInsight] = useState<any>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const [inputMode, setInputMode] = useState<'single' | 'batch'>('single');
   const [batchInput, setBatchInput] = useState('');
+  const [clipboardSuggestion, setClipboardSuggestion] = useState<string | null>(null);
+
+  const handleInputFocus = async () => {
+    if (url.trim()) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('http://') || trimmed.startsWith('https://')) && trimmed.length > 8) {
+          setClipboardSuggestion(trimmed);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const detectedPlatform = detectPlatform(url);
   const platformInfo = getPlatformInfo(detectedPlatform);
@@ -214,7 +203,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
           }),
         }).catch(() => {});
       } else {
-        newTask.status = 'error';
+        newTask.status = 'failed';
         newTask.progress = 0;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
@@ -222,7 +211,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     } catch (err) {
       clearInterval(timer);
       console.error('Download error:', err);
-      newTask.status = 'error';
+      newTask.status = 'failed';
       newTask.progress = 0;
       newTask.speedMBs = 0;
       newTask.etaSeconds = 0;
@@ -231,7 +220,27 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
 
   const handleStartDownload = () => {
     const targetUrl = url.trim();
-    if (!targetUrl) return;
+    if (!targetUrl) {
+      setValidationError('Please paste a link before downloading.');
+      return;
+    }
+
+    // Validate URL structure
+    try {
+      const urlToCheck = targetUrl.startsWith('http://') || targetUrl.startsWith('https://')
+        ? targetUrl
+        : `https://${targetUrl}`;
+      const parsed = new URL(urlToCheck);
+      if (!parsed.hostname || !parsed.hostname.includes('.') || parsed.hostname.length < 4) {
+        setValidationError('Please paste a valid media link (e.g. https://www.youtube.com/watch?v=... or tiktok.com/...)');
+        return;
+      }
+    } catch {
+      setValidationError('Please paste a valid media link (e.g. https://www.youtube.com/watch?v=... or tiktok.com/...)');
+      return;
+    }
+
+    setValidationError(null);
     startDownloadForUrl(targetUrl);
   };
 
@@ -241,8 +250,12 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
       .map((u) => u.trim())
       .filter((u) => u.length > 0);
 
-    if (urls.length === 0) return;
+    if (urls.length === 0) {
+      setValidationError('Please paste at least one link into the batch box.');
+      return;
+    }
 
+    setValidationError(null);
     urls.forEach((targetUrl) => {
       startDownloadForUrl(targetUrl);
     });
@@ -251,30 +264,30 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full">
       {/* Hero Section */}
-      <div className="text-center max-w-2xl mx-auto pt-6 pb-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-xs font-semibold text-emerald-300 mb-3">
-          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+      <div className="text-center max-w-2xl mx-auto pt-4 sm:pt-6 pb-2 px-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[11px] sm:text-xs font-semibold text-emerald-300 mb-3">
+          <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           <span>100% Free · Uncapped Speed · Accounts Aren't Needed</span>
         </div>
-        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-3 whitespace-nowrap">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mb-2 sm:mb-3">
           Download any video or audio in <span className="bg-gradient-to-r from-purple-400 via-violet-300 to-indigo-300 bg-clip-text text-transparent">high fidelity</span>
         </h1>
-        <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-          YouTube, X, TikTok, Insta, Reddit, etc. Save clean MP4 or MP3 files directly to your device with uncapped multi-stream speed.
+        <p className="text-zinc-400 text-xs sm:text-sm md:text-base leading-relaxed">
+          Downloads from 1,000 plus sites. Save clean MP4 or MP3 files directly to your device with uncapped multi-stream speed.
         </p>
       </div>
 
       {/* Main Downloader Input Box with Google AI Mode Style Moving Outer Glow */}
-      <GlowBeamBox className="max-w-3xl mx-auto" innerClassName="p-5 sm:p-7">
+      <GlowBeamBox className="max-w-3xl mx-auto w-full" innerClassName="p-4 sm:p-6 md:p-7">
         {/* Mode Toggle Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setInputMode('single')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 inputMode === 'single'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                   : 'bg-[#1b1233] text-zinc-400 hover:text-white border border-purple-900/40'
@@ -285,13 +298,13 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
             <button
               type="button"
               onClick={() => setInputMode('batch')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 inputMode === 'batch'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                   : 'bg-[#1b1233] text-zinc-400 hover:text-white border border-purple-900/40'
               }`}
             >
-              Batch Queue (Newline-Separated URLs)
+              Batch Queue
             </button>
           </div>
           <span className="text-[11px] text-purple-300 font-mono">
@@ -303,23 +316,34 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         {inputMode === 'batch' ? (
           <div className="space-y-3 mb-5">
             <div className="relative">
-              <div className="absolute left-4 top-3.5 pointer-events-none text-purple-400">
-                <Link2 className="w-5 h-5" />
+              <div className="absolute left-3.5 sm:left-4 top-3.5 pointer-events-none text-purple-400">
+                <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <textarea
                 rows={4}
                 value={batchInput}
-                onChange={(e) => setBatchInput(e.target.value)}
+                onChange={(e) => {
+                  setBatchInput(e.target.value);
+                  if (validationError) setValidationError(null);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     handleQueueBatch();
                   }
                 }}
-                placeholder="Paste multiple URLs here (one URL per line):\nhttps://www.youtube.com/watch?v=...\nhttps://www.tiktok.com/@user/video/...\nhttps://x.com/user/status/..."
-                className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+                placeholder="paste a link here"
+                className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
               />
             </div>
+
+            {/* Batch Validation Error */}
+            {validationError && inputMode === 'batch' && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium animate-in fade-in duration-200">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{validationError}</span>
+              </div>
+            )}
 
             {/* Live URL Validation Checklist */}
             {batchInput.trim().length > 0 && (() => {
@@ -375,30 +399,75 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
             })()}
           </div>
         ) : (
-          <div className="relative mb-6">
+          <div className="relative mb-5 sm:mb-6">
+            {clipboardSuggestion && !url && (
+              <div className="mb-3 p-2.5 rounded-xl bg-purple-950/90 border border-purple-500/50 text-xs text-purple-200 flex items-center justify-between gap-2 animate-in fade-in duration-200 shadow-lg">
+                <div className="flex items-center gap-2 truncate">
+                  <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="truncate">Found in clipboard: <strong className="text-white font-mono">{clipboardSuggestion}</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUrl(clipboardSuggestion);
+                      const bestFormat = autoSelectBestFormat(clipboardSuggestion);
+                      setFormat(bestFormat);
+                      setContainerFormat(bestFormat);
+                      setClipboardSuggestion(null);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs cursor-pointer shadow-sm"
+                  >
+                    Use Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClipboardSuggestion(null)}
+                    className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="relative flex items-center">
-              <div className="absolute left-4 pointer-events-none text-purple-400">
-                <Link2 className="w-5 h-5" />
+              <div className="absolute left-3.5 sm:left-4 pointer-events-none text-purple-400">
+                <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
 
               <input
                 type="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onFocus={handleInputFocus}
+                onChange={(e) => {
+                  const newUrl = e.target.value;
+                  setUrl(newUrl);
+                  if (validationError) setValidationError(null);
+                  if (newUrl.trim().length > 3) {
+                    const bestFormat = autoSelectBestFormat(newUrl);
+                    setFormat(bestFormat);
+                    setContainerFormat(bestFormat);
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     handleStartDownload();
                   }
                 }}
-                placeholder="Paste any link from YouTube, X, TikTok, Insta, etc..."
-                className="w-full pl-12 pr-44 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+                placeholder="paste a link here"
+                className={`w-full pl-10 sm:pl-12 pr-28 sm:pr-44 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
+                  validationError
+                    ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
+                    : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
+                }`}
               />
 
               {/* Direct Quick Download & Platform badge */}
               <div className="absolute right-2 flex items-center gap-1.5">
                 <span
-                  className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded text-white shadow-sm hidden sm:inline-block"
+                  className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded text-white shadow-sm hidden md:inline-block"
                   style={{ backgroundColor: platformInfo.color }}
                 >
                   {platformInfo.name}
@@ -406,15 +475,22 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
                 <button
                   type="button"
                   onClick={handleStartDownload}
-                  disabled={!url.trim()}
-                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5"
-                  title="Press Enter or click to download"
+                  className="px-3 sm:px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 active:scale-95"
+                  title="Click to download"
                 >
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                   <span>Download</span>
                 </button>
               </div>
             </div>
+
+            {/* Validation Error Message */}
+            {validationError && (
+              <div className="flex items-center gap-2 p-3 mt-2.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium animate-in fade-in duration-200 shadow-md">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="break-words">{validationError}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -493,26 +569,42 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <button
-            onClick={inputMode === 'batch' ? handleQueueBatch : handleStartDownload}
-            className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:via-violet-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-purple-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 group cursor-pointer"
-          >
-            <span>{inputMode === 'batch' ? 'Download All' : 'Download'}</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-
-          <button
-            onClick={handleAnalyzeWithAI}
-            disabled={isAnalyzing}
-            className="w-full sm:w-auto py-3.5 px-4 rounded-xl bg-[#1e153b] hover:bg-[#281c4d] border border-purple-800/40 text-purple-200 text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            title="Inspect media link and extract clean tags with Gemini"
-          >
-            <Sparkles className={`w-4 h-4 text-purple-400 ${isAnalyzing ? 'animate-spin' : ''}`} />
-            <span>{isAnalyzing ? 'Gemini Analyzing...' : 'AI Link Inspector'}</span>
-          </button>
-        </div>
+        {/* Action Controls: Batch Download or AI Inspector */}
+        {inputMode === 'batch' ? (
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <button
+              type="button"
+              onClick={handleQueueBatch}
+              className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:via-violet-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-purple-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 group cursor-pointer"
+            >
+              <span>Download Batch Queue</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button
+              type="button"
+              onClick={handleAnalyzeWithAI}
+              disabled={isAnalyzing}
+              className="w-full sm:w-auto py-3.5 px-4 rounded-xl bg-[#1e153b] hover:bg-[#281c4d] border border-purple-800/40 text-purple-200 text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              title="Inspect media link and extract clean tags with Gemini"
+            >
+              <Sparkles className={`w-4 h-4 text-purple-400 ${isAnalyzing ? 'animate-spin' : ''}`} />
+              <span>{isAnalyzing ? 'Gemini Analyzing...' : 'AI Link Inspector'}</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleAnalyzeWithAI}
+              disabled={isAnalyzing}
+              className="w-full py-3 px-4 rounded-xl bg-[#1e153b] hover:bg-[#281c4d] border border-purple-800/40 text-purple-200 text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              title="Inspect media link and extract clean tags with Gemini"
+            >
+              <Sparkles className={`w-4 h-4 text-purple-400 ${isAnalyzing ? 'animate-spin' : ''}`} />
+              <span>{isAnalyzing ? 'Gemini Analyzing...' : 'AI Link Inspector'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Gemini AI Inspector Output Card */}
         {aiInsight && (
@@ -573,36 +665,11 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         </div>
       )}
 
-      {/* Supported Platforms Grid */}
-      <div className="max-w-4xl mx-auto p-5 rounded-2xl bg-[#130d24]/60 border border-purple-900/30">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-3 text-center sm:text-left">
-          Universal Social & Web Media Support
-        </h4>
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs">
-          {[
-            'YouTube (4K/8K)',
-            'X (Twitter)',
-            'TikTok',
-            'Instagram Reels',
-            'Reddit',
-            'Facebook',
-            'Twitch Clips',
-            'Vimeo',
-            'Dailymotion',
-            'Pinterest',
-            'Threads',
-            'SoundCloud',
-            'Bandcamp',
-            'Direct MP4/MP3 URLs',
-            '& Any Web Media',
-          ].map((site) => (
-            <span
-              key={site}
-              className="px-2.5 py-1 rounded-md bg-[#1d1436] border border-purple-900/40 text-purple-200 font-mono text-[11px]"
-            >
-              {site}
-            </span>
-          ))}
+      {/* Downloads from 1,000 plus sites banner */}
+      <div className="text-center max-w-md mx-auto pt-2 pb-6">
+        <div className="inline-flex items-center justify-center gap-2.5 px-6 py-2.5 rounded-full bg-[#160d2d]/80 border border-purple-800/40 text-xs sm:text-sm font-semibold text-purple-200 shadow-lg shadow-purple-950/40">
+          <Globe className="w-4 h-4 text-purple-400" />
+          <span>Downloads from 1,000 plus sites</span>
         </div>
       </div>
     </div>

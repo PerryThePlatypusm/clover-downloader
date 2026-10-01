@@ -17,6 +17,7 @@ export type MediaPlatform =
   | 'dailymotion'
   | 'pinterest'
   | 'threads'
+  | 'phub'
   | 'other';
 
 export type DownloadFormat =
@@ -71,6 +72,7 @@ export interface UserProfile {
   username: string;
   email: string;
   avatarColor: string;
+  avatarUrl?: string;
   joinedAt: string;
   downloadsCount: number;
   notesSentCount: number;
@@ -95,5 +97,49 @@ export interface ThankYouNote {
   createdAt: string;
   likes: number;
   reply?: NoteReply;
+}
+
+export interface StreamingEpisode {
+  id: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  duration?: string;
+  description?: string;
+}
+
+export interface StreamingSeason {
+  seasonNumber: number;
+  title: string;
+  episodes: StreamingEpisode[];
+}
+
+export interface StreamingSeriesInfo {
+  title: string;
+  platform: 'netflix' | 'crunchyroll' | 'other';
+  seasons: StreamingSeason[];
+  totalEpisodes: number;
+  year?: string;
+  genre?: string;
+  description?: string;
+  thumbnail?: string;
+}
+
+export interface AlbumTrackInfo {
+  trackNumber: number;
+  title: string;
+  artist: string;
+  duration: string;
+}
+
+export interface AlbumInfo {
+  albumTitle: string;
+  artist: string;
+  year?: string;
+  genre?: string;
+  totalTracks: number;
+  tracks: AlbumTrackInfo[];
+  platform: 'spotify' | 'applemusic' | 'soundcloud' | 'other';
+  coverUrl?: string;
 }
 

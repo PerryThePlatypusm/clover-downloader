@@ -22,35 +22,7 @@ interface CreditsPageProps {
   onNoteSent?: () => void;
 }
 
-const DEFAULT_NOTES: ThankYouNote[] = [
-  {
-    id: 'note_1',
-    userId: 'usr_clover_01',
-    username: 'Aethelgard',
-    avatarColor: 'from-purple-500 to-violet-600',
-    text: 'Such a clean aesthetic and the soft purple dark mode is so easy on the eyes. Immense gratitude to clover!',
-    createdAt: '2 hours ago',
-    likes: 14,
-  },
-  {
-    id: 'note_2',
-    userId: 'usr_clover_02',
-    username: 'TokyoNightVibes',
-    avatarColor: 'from-emerald-500 to-teal-600',
-    text: 'Finally a downloader with zero ads, zero paywalls, and actual studio quality 24-bit FLAC. Big props clover!',
-    createdAt: '5 hours ago',
-    likes: 8,
-  },
-  {
-    id: 'note_3',
-    userId: 'usr_clover_03',
-    username: 'SynthArchitect',
-    avatarColor: 'from-indigo-600 to-purple-800',
-    text: 'Clover had the best vision for this project. Minimalist perfection.',
-    createdAt: 'Yesterday',
-    likes: 21,
-  },
-];
+const DEFAULT_NOTES: ThankYouNote[] = [];
 
 export const CreditsPage: React.FC<CreditsPageProps> = ({
   currentUser,
@@ -68,7 +40,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
     fetch('/api/dev/notes')
       .then((r) => r.json())
       .then((data) => {
-        if (data.success && data.notes?.length) {
+        if (data.success && Array.isArray(data.notes)) {
           setNotesList(data.notes);
           localStorage.setItem('clover_notes_v2', JSON.stringify(data.notes));
         }
@@ -77,7 +49,8 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
         const saved = localStorage.getItem('clover_notes_v2');
         if (saved) {
           try {
-            setNotesList(JSON.parse(saved));
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) setNotesList(parsed);
           } catch (e) {
             // fallback
           }
@@ -95,6 +68,11 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
     e.preventDefault();
     if (!currentUser || !userNote.trim()) return;
 
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const formattedCreatedAt = `${dateStr} at ${timeStr}`;
+
     const newNote: ThankYouNote = {
       id: `note_${Date.now()}`,
       userId: currentUser.id,
@@ -102,7 +80,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
       email: currentUser.email,
       avatarColor: currentUser.avatarColor,
       text: userNote.trim(),
-      createdAt: 'Just now',
+      createdAt: formattedCreatedAt,
       likes: 1,
     };
 
@@ -320,40 +298,47 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
             Community Appreciation Wall ({notesList.length})
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {notesList.map((note) => (
-              <div
-                key={note.id}
-                className="p-3.5 rounded-xl bg-[#180f2d] border border-purple-900/30 space-y-2 flex flex-col justify-between"
-              >
-                <p className="text-xs text-zinc-300 leading-relaxed italic">
-                  "{note.text}"
-                </p>
+          {notesList.length === 0 ? (
+            <div className="p-8 rounded-xl bg-[#180f2d] border border-purple-900/30 text-center space-y-2">
+              <p className="text-sm text-zinc-400">No appreciation notes posted yet.</p>
+              <p className="text-xs text-zinc-500">Sign in with an account above to leave a note for Clover!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {notesList.map((note) => (
+                <div
+                  key={note.id}
+                  className="p-3.5 rounded-xl bg-[#180f2d] border border-purple-900/30 space-y-2 flex flex-col justify-between"
+                >
+                  <p className="text-xs text-zinc-300 leading-relaxed italic">
+                    "{note.text}"
+                  </p>
 
-                {note.reply && (
-                  <div className="p-2.5 rounded-lg bg-purple-950/60 border border-purple-500/40 text-[11px] text-purple-200 space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-sky-400">
-                      <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0" />
-                      <span>Official Verified Reply from clover</span>
+                  {note.reply && (
+                    <div className="p-2.5 rounded-lg bg-purple-950/60 border border-purple-500/40 text-[11px] text-purple-200 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-sky-400">
+                        <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0" />
+                        <span>Official Verified Reply from clover</span>
+                      </div>
+                      <p className="text-zinc-200 italic">{note.reply.text}</p>
                     </div>
-                    <p className="text-zinc-200 italic">{note.reply.text}</p>
-                  </div>
-                )}
+                  )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-purple-900/20 text-[11px] text-zinc-400">
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className={`w-4 h-4 rounded-full bg-gradient-to-br ${note.avatarColor} flex items-center justify-center text-[8px]`}
-                    >
-                      🍀
+                  <div className="flex items-center justify-between pt-2 border-t border-purple-900/20 text-[11px] text-zinc-400">
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={`w-4 h-4 rounded-full bg-gradient-to-br ${note.avatarColor} flex items-center justify-center text-[8px]`}
+                      >
+                        🍀
+                      </div>
+                      <span className="font-semibold text-purple-200">@{note.username}</span>
                     </div>
-                    <span className="font-semibold text-purple-200">@{note.username}</span>
+                    <span className="font-mono text-zinc-500">{note.createdAt}</span>
                   </div>
-                  <span className="font-mono text-zinc-500">{note.createdAt}</span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

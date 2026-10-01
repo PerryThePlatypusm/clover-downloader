@@ -9,6 +9,7 @@ import {
   startRealDownload,
   detectPlatform,
   playPreviewSound,
+  autoSelectBestFormat,
 } from '../utils/mediaUtils';
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
@@ -29,6 +30,11 @@ import {
   Upload,
   FileAudio,
   X,
+  AlertCircle,
+  Globe,
+  Square,
+  RotateCcw,
+  Check,
 } from 'lucide-react';
 
 interface MusicDownloaderProps {
@@ -48,82 +54,46 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   const [selectedFormat, setSelectedFormat] = useState<DownloadFormat>('flac');
   const [selectedBitrate, setSelectedBitrate] = useState('24-bit / 192kHz (Master FLAC)');
   const [isPlayingPreview, setIsPlayingPreview] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [clipboardSuggestion, setClipboardSuggestion] = useState<string | null>(null);
 
-  // Gemini Thinking Resolver state
+  const handleInputFocus = async () => {
+    if (searchQuery.trim()) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('http://') || trimmed.startsWith('https://')) && trimmed.length > 8) {
+          setClipboardSuggestion(trimmed);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  // Gemini Thinking Resolver state (Humming, Singing, or Audio File Upload)
   const [thinkingQuery, setThinkingQuery] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingResult, setThinkingResult] = useState<any>(null);
   const [thinkingAudioBase64, setThinkingAudioBase64] = useState<string | null>(null);
   const [thinkingAudioFileName, setThinkingAudioFileName] = useState<string | null>(null);
-  const [thinkingAudioMime, setThinkingAudioMime] = useState<string>('audio/mpeg');
+  const [thinkingAudioMime, setThinkingAudioMime] = useState<string>('audio/webm');
+  const [thinkingAudioPreviewUrl, setThinkingAudioPreviewUrl] = useState<string | null>(null);
   const [isRecordingForThinking, setIsRecordingForThinking] = useState(false);
-  const thinkingFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcribeStatus, setTranscribeStatus] = useState<string | null>(null);
+  const thinkingFileInputRef = useRef<HTMLInputElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const timerIntervalRef = useRef<any>(null);
 
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'model'; content: string }>>([
     { role: 'model', content: "Hello! I'm your Clover Audio Master AI. Ask me anything about high-res FLAC codecs, track identification, or audio mixing!" }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
-
-  const handleStartMicrophoneTranscription = async () => {
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        alert('Microphone not supported in this environment.');
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunks.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        setTranscribeStatus('Transcribing with gemini-3.5-transcribe...');
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64Data = (reader.result as string).split(',')[1];
-          try {
-            const res = await fetch('/api/gemini/transcribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ audioBase64: base64Data, mimeType: 'audio/webm' }),
-            });
-            const data = await res.json();
-            if (data.success && data.text) {
-              setSearchQuery(data.text);
-              setTranscribeStatus('Audio transcribed successfully!');
-            }
-          } catch (err) {
-            setTranscribeStatus('Transcription failed.');
-          } finally {
-            setTimeout(() => setTranscribeStatus(null), 3000);
-          }
-        };
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setTranscribeStatus('Listening... Speak song or artist...');
-
-      setTimeout(() => {
-        mediaRecorder.stop();
-        setIsRecording(false);
-        stream.getTracks().forEach((t) => t.stop());
-      }, 4000);
-    } catch (err) {
-      setIsRecording(false);
-      setTranscribeStatus('Microphone permission denied.');
-      setTimeout(() => setTranscribeStatus(null), 3000);
-    }
-  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,8 +182,28 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   };
 
   const handleDirectMusicDownload = async () => {
-    if (!searchQuery.trim()) return;
     const query = searchQuery.trim();
+    if (!query) {
+      setValidationError('Please paste a link before downloading.');
+      return;
+    }
+
+    // Validate link
+    try {
+      const urlToCheck = query.startsWith('http://') || query.startsWith('https://')
+        ? query
+        : `https://${query}`;
+      const parsed = new URL(urlToCheck);
+      if (!parsed.hostname || !parsed.hostname.includes('.') || parsed.hostname.length < 4) {
+        setValidationError('Please paste a valid media or music link (e.g. Spotify, Apple Music, SoundCloud, YouTube, etc.)');
+        return;
+      }
+    } catch {
+      setValidationError('Please paste a valid media or music link (e.g. Spotify, Apple Music, SoundCloud, YouTube, etc.)');
+      return;
+    }
+
+    setValidationError(null);
     const itemPlatform = detectPlatform(query);
 
     let cleanTitle = query;
@@ -308,7 +298,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
 
         triggerDirectDownload(result.downloadUrl, finalFilename);
       } else {
-        newTask.status = 'error';
+        newTask.status = 'failed';
         newTask.progress = 0;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
@@ -316,7 +306,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
     } catch (err) {
       clearInterval(interval);
       console.error('Download music error:', err);
-      newTask.status = 'error';
+      newTask.status = 'failed';
       newTask.progress = 0;
       newTask.speedMBs = 0;
       newTask.etaSeconds = 0;
@@ -326,8 +316,12 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   const handleThinkingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setRecordingError(null);
     setThinkingAudioFileName(file.name);
     setThinkingAudioMime(file.type || 'audio/mpeg');
+
+    if (thinkingAudioPreviewUrl) URL.revokeObjectURL(thinkingAudioPreviewUrl);
+    setThinkingAudioPreviewUrl(URL.createObjectURL(file));
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -335,16 +329,30 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       setThinkingAudioBase64(base64);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleRecordVoiceForThinking = async () => {
+  const handleClearThinkingAudio = () => {
+    if (thinkingAudioPreviewUrl) URL.revokeObjectURL(thinkingAudioPreviewUrl);
+    setThinkingAudioBase64(null);
+    setThinkingAudioFileName(null);
+    setThinkingAudioPreviewUrl(null);
+    setRecordingError(null);
+  };
+
+  const handleStartRecordingForThinking = async () => {
     try {
+      setRecordingError(null);
       if (!navigator.mediaDevices?.getUserMedia) {
-        alert('Microphone not supported in this environment.');
+        setRecordingError('Microphone not supported on this browser or device.');
         return;
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
       const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
       const chunks: Blob[] = [];
 
       mediaRecorder.ondataavailable = (e) => {
@@ -352,30 +360,55 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        setThinkingAudioFileName('voice_humming_recording.webm');
-        setThinkingAudioMime('audio/webm');
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type: mimeType });
+        
+        if (thinkingAudioPreviewUrl) URL.revokeObjectURL(thinkingAudioPreviewUrl);
+        const previewUrl = URL.createObjectURL(blob);
+        setThinkingAudioPreviewUrl(previewUrl);
+        setThinkingAudioFileName('Hummed / Sung Melody (Voice Recording)');
+        setThinkingAudioMime(mimeType);
+
         const reader = new FileReader();
         reader.onloadend = () => {
           const b64 = (reader.result as string).split(',')[1];
           setThinkingAudioBase64(b64);
         };
         reader.readAsDataURL(blob);
+
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecordingForThinking(false);
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setIsRecordingForThinking(true);
+      setRecordingSeconds(0);
 
-      setTimeout(() => {
-        if (mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
+      const startTime = Date.now();
+      timerIntervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setRecordingSeconds(elapsed);
+        if (elapsed >= 15) {
+          handleStopRecordingForThinking();
         }
-        setIsRecordingForThinking(false);
-        stream.getTracks().forEach((t) => t.stop());
-      }, 5000);
-    } catch {
+      }, 1000);
+    } catch (err: any) {
+      console.error('Microphone error:', err);
       setIsRecordingForThinking(false);
+      setRecordingError('Microphone permission was denied. Please allow microphone access to hum or sing.');
     }
+  };
+
+  const handleStopRecordingForThinking = () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    setIsRecordingForThinking(false);
   };
 
   const handleDeepThinkingSearch = async () => {
@@ -391,7 +424,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
           query: thinkingQuery,
           audioBase64: thinkingAudioBase64,
           mimeType: thinkingAudioMime,
-          type: 'audio_music_identification_lossless',
+          type: 'audio_music_identification_humming_singing',
         }),
       });
       const data = await res.json();
@@ -406,73 +439,103 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full">
       {/* Header */}
-      <div className="text-center max-w-2xl mx-auto pt-6 pb-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-xs font-semibold text-emerald-300 mb-3">
-          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+      <div className="text-center max-w-2xl mx-auto pt-4 sm:pt-6 pb-2 px-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[11px] sm:text-xs font-semibold text-emerald-300 mb-3">
+          <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           <span>100% Free · Lossless Audio · Accounts Aren't Needed</span>
         </div>
-        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-3 whitespace-nowrap">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mb-2 sm:mb-3">
           Spotify, Apple Music & SoundCloud Downloader
         </h1>
-        <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-          Rip high-fidelity audio up to 24-bit 192kHz FLAC or 320kbps MP3 with embedded album art, lossless tags, and instant device download.
+        <p className="text-zinc-400 text-xs sm:text-sm md:text-base leading-relaxed">
+          Downloads from 1,000 plus sites. Rip high-fidelity audio up to 24-bit 192kHz FLAC or 320kbps MP3 with embedded album art, lossless tags, and instant device download.
         </p>
       </div>
 
       {/* Top Controls: Search / URL bar & Format Selector with Moving Outer Glow */}
-      <GlowBeamBox className="max-w-4xl mx-auto" innerClassName="p-5 sm:p-7 space-y-5">
+      <GlowBeamBox className="max-w-4xl mx-auto w-full" innerClassName="p-4 sm:p-6 md:p-7 space-y-4 sm:space-y-5">
         {/* Search / URL input with Transcribe Audio microphone button & direct Download button */}
         <div className="space-y-2">
+          {clipboardSuggestion && !searchQuery && (
+            <div className="mb-3 p-2.5 rounded-xl bg-purple-950/90 border border-purple-500/50 text-xs text-purple-200 flex items-center justify-between gap-2 animate-in fade-in duration-200 shadow-lg">
+              <div className="flex items-center gap-2 truncate">
+                <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                <span className="truncate">Found in clipboard: <strong className="text-white font-mono">{clipboardSuggestion}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery(clipboardSuggestion);
+                    const bestFormat = autoSelectBestFormat(clipboardSuggestion);
+                    setSelectedFormat(bestFormat);
+                    setClipboardSuggestion(null);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs cursor-pointer shadow-sm"
+                >
+                  Use Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClipboardSuggestion(null)}
+                  className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="relative flex items-center">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
-              <Search className="w-5 h-5" />
+            <div className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
+              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={handleInputFocus}
+              onChange={(e) => {
+                const q = e.target.value;
+                setSearchQuery(q);
+                if (validationError) setValidationError(null);
+                if (q.trim().length > 3) {
+                  const bestFmt = autoSelectBestFormat(q);
+                  setSelectedFormat(bestFmt);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   handleDirectMusicDownload();
                 }
               }}
-              placeholder="Paste Spotify track/album/playlist link, Apple Music URL, or search artist / song..."
-              className="w-full pl-12 pr-52 py-3.5 rounded-xl bg-[#1b1233] border border-purple-800/40 text-white placeholder-zinc-500 text-sm sm:text-base focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+              placeholder="paste a link here"
+              className={`w-full pl-10 sm:pl-12 pr-28 sm:pr-48 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
+                validationError
+                  ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
+                  : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
+              }`}
             />
             <div className="absolute right-2 flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={handleDirectMusicDownload}
-                disabled={!searchQuery.trim()}
-                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 sm:px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
                 title="Press Enter or click to download"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 shrink-0" />
                 <span>Download</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleStartMicrophoneTranscription}
-                disabled={isRecording}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isRecording
-                    ? 'bg-rose-600 text-white animate-pulse'
-                    : 'bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-600/40'
-                }`}
-                title="Transcribe Audio with Gemini"
-              >
-                <Mic className={`w-3.5 h-3.5 ${isRecording ? 'animate-bounce' : ''}`} />
-                <span>{isRecording ? 'Listening...' : 'Transcribe'}</span>
               </button>
             </div>
           </div>
-          {transcribeStatus && (
-            <div className="text-xs text-purple-300 font-mono px-1 flex items-center gap-1.5 animate-in fade-in">
-              <Sparkles className="w-3 h-3 text-purple-400 animate-spin" />
-              <span>{transcribeStatus}</span>
+
+          {/* Validation Error Message */}
+          {validationError && (
+            <div className="flex items-center gap-2 p-3 mt-2 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium animate-in fade-in duration-200 shadow-md">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="break-words">{validationError}</span>
             </div>
           )}
         </div>
@@ -647,80 +710,215 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       )}
 
       {/* Gemini Deep Thinking Music Intelligence Module */}
-      <div className="max-w-4xl mx-auto rounded-2xl border border-purple-800/40 bg-gradient-to-br from-[#160f2b] to-[#120a22] p-5 sm:p-7 shadow-xl">
-        <div className="flex items-center gap-2.5 mb-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
-            <BrainCircuit className="w-4 h-4" />
+      <div className="max-w-4xl mx-auto rounded-2xl border border-purple-800/40 bg-gradient-to-br from-[#160f2b] to-[#120a22] p-5 sm:p-7 shadow-xl space-y-4">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
+              <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                Gemini High-Thinking Music Resolver
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Can't find a track name? Hum or sing it, input an audio file, or enter lyrics for deep acoustic reasoning.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              Gemini High-Thinking Music Resolver
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-900/50 text-indigo-300 border border-indigo-700/40">
-                Thinking Level: High
-              </span>
-            </h3>
-            <p className="text-xs text-zinc-400">
-              Can't find a track name? Enter vague lyrics, a humming description, or obscure remix query for deep acoustic reasoning.
-            </p>
-          </div>
+          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-900/50 text-indigo-300 border border-indigo-700/40 shrink-0 hidden sm:inline-block">
+            Thinking Level: High
+          </span>
         </div>
 
-        <div className="mt-4 flex flex-col sm:flex-row gap-3">
+        {/* Audio Input Features: Mic Humming/Singing and Audio File Input */}
+        <div className="space-y-2.5">
+          {/* Active Recording State */}
+          {isRecordingForThinking ? (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs shadow-inner animate-pulse">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                <span className="font-semibold text-rose-100">
+                  Recording humming / singing: 0:{recordingSeconds < 10 ? '0' : ''}{recordingSeconds} / 0:15
+                </span>
+                <span className="text-zinc-400 hidden sm:inline">— Hum, sing, or whistle the tune into your mic</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleStopRecordingForThinking}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>Stop & Save</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Microphone Humming / Singing Button */}
+              <button
+                type="button"
+                onClick={handleStartRecordingForThinking}
+                disabled={isThinking}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#21153f] hover:bg-[#2c1d53] text-purple-200 border border-purple-800/40 text-xs font-semibold transition-all cursor-pointer active:scale-95 shadow-sm"
+                title="Hum, sing, or whistle a tune for Google AI to identify"
+              >
+                <Mic className="w-3.5 h-3.5 text-purple-400" />
+                <span>Hum or Sing Song</span>
+              </button>
+
+              {/* Input Audio File Button */}
+              <button
+                type="button"
+                onClick={() => thinkingFileInputRef.current?.click()}
+                disabled={isThinking}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#21153f] hover:bg-[#2c1d53] text-indigo-200 border border-purple-800/40 text-xs font-semibold transition-all cursor-pointer active:scale-95 shadow-sm"
+                title="Upload an audio file (MP3, WAV, M4A, WebM) for song identification"
+              >
+                <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Input Audio File</span>
+              </button>
+              <input
+                type="file"
+                ref={thinkingFileInputRef}
+                onChange={handleThinkingFileUpload}
+                accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.webm"
+                className="hidden"
+              />
+
+              <span className="text-[11px] text-zinc-400 font-mono hidden sm:inline">
+                Record a hum/melody or upload audio sample
+              </span>
+            </div>
+          )}
+
+          {/* Attached Audio Preview Chip */}
+          {thinkingAudioPreviewUrl && !isRecordingForThinking && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-[#1d143a] border border-purple-700/40 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileAudio className="w-4 h-4 text-purple-400 shrink-0" />
+                <span className="text-white font-medium truncate max-w-[220px] sm:max-w-xs">
+                  {thinkingAudioFileName}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                  Ready for AI Analysis
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <audio src={thinkingAudioPreviewUrl} controls className="h-7 w-48 sm:w-56" />
+                <button
+                  type="button"
+                  onClick={handleClearThinkingAudio}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  title="Remove audio"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Recording Error Notice */}
+          {recordingError && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{recordingError}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Text description input */}
+        <div>
           <input
             type="text"
             value={thinkingQuery}
             onChange={(e) => setThinkingQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleDeepThinkingSearch();
+              }
+            }}
             placeholder="e.g. 'That midnight lofi song with purple piano and rain sound' or lyrics snippet..."
-            className="flex-1 px-4 py-2.5 rounded-xl bg-[#1d1438] border border-purple-800/40 text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-[#1d1438] border border-purple-800/40 text-white placeholder-zinc-500 text-xs sm:text-sm focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
           />
-          <button
-            onClick={handleDeepThinkingSearch}
-            disabled={isThinking}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20"
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${isThinking ? 'animate-spin' : ''}`} />
-            <span>{isThinking ? 'Thinking Deeply...' : 'Deep Think Match'}</span>
-          </button>
         </div>
 
+        {/* Deep Think Match Button */}
+        <button
+          type="button"
+          onClick={handleDeepThinkingSearch}
+          disabled={(!thinkingQuery.trim() && !thinkingAudioBase64) || isThinking || isRecordingForThinking}
+          className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+        >
+          <Sparkles className={`w-4 h-4 text-indigo-300 ${isThinking ? 'animate-spin' : ''}`} />
+          <span>{isThinking ? 'Google AI Analyzing Melodic Acoustics...' : 'Deep Think Match'}</span>
+        </button>
+
+        {/* Identified Song Result Card */}
         {thinkingResult && (
-          <div className="mt-4 p-4 rounded-xl bg-[#1c1339] border border-indigo-500/30 text-xs space-y-2 animate-in fade-in duration-200">
+          <div className="mt-4 p-4 sm:p-5 rounded-xl bg-[#1c1339] border border-indigo-500/30 text-xs space-y-2.5 animate-in fade-in duration-200">
             <div className="flex items-center justify-between text-indigo-300 font-semibold">
-              <span>Acoustic Match ({thinkingResult.confidence})</span>
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                Acoustic Match ({thinkingResult.confidence})
+              </span>
               <span className="text-zinc-400 font-mono">{thinkingResult.year}</span>
             </div>
 
-            <div className="text-sm font-bold text-white">
-              {thinkingResult.matchedTrack} — {thinkingResult.artist}
+            <div className="text-base sm:text-lg font-bold text-white">
+              {thinkingResult.matchedTrack} — <span className="text-purple-300">{thinkingResult.artist}</span>
             </div>
             <p className="text-zinc-300 text-xs">Album: {thinkingResult.album} · Genre: {thinkingResult.genre}</p>
-            <p className="text-zinc-400 italic text-[11px]">{thinkingResult.notes}</p>
+            <p className="text-zinc-400 italic text-[11px] leading-relaxed bg-[#140b28] p-2.5 rounded-lg border border-purple-900/40">
+              💡 {thinkingResult.notes}
+            </p>
 
-            <div className="pt-2 flex items-center justify-between border-t border-purple-900/30">
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-purple-900/30">
               <span className="text-purple-300 font-mono text-[11px]">Recommended: {thinkingResult.recommendedBitrate}</span>
-              <button
-                onClick={() => {
-                  handleDownloadSingleTrack({
-                    id: `ai_${Date.now()}`,
-                    title: thinkingResult.matchedTrack,
-                    artist: thinkingResult.artist,
-                    album: thinkingResult.album,
-                    duration: '3:30',
-                    coverUrl: '/src/assets/images/clover_soundpack_cover_1790800133647.jpg',
-                    platform: 'spotify',
-                    bitrate: thinkingResult.recommendedBitrate,
-                    year: thinkingResult.year,
-                    genre: thinkingResult.genre,
-                    sizeMB: 36.2,
-                  });
-                }}
-                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold cursor-pointer"
-              >
-                Download Matched Song
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery(`${thinkingResult.artist} - ${thinkingResult.matchedTrack}`);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[#27194a] hover:bg-[#342261] text-purple-200 text-xs font-semibold cursor-pointer border border-purple-700/40 transition-colors"
+                  title="Paste song into top link input to download in FLAC/MP3"
+                >
+                  Paste into Link Bar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadSingleTrack({
+                      id: `ai_${Date.now()}`,
+                      title: thinkingResult.matchedTrack,
+                      artist: thinkingResult.artist,
+                      album: thinkingResult.album,
+                      duration: '3:30',
+                      coverUrl: '/src/assets/images/clover_soundpack_cover_1790800133647.jpg',
+                      platform: 'spotify',
+                      bitrate: thinkingResult.recommendedBitrate,
+                      year: thinkingResult.year,
+                      genre: thinkingResult.genre,
+                      sizeMB: 36.2,
+                    });
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold cursor-pointer shadow-md transition-all active:scale-95"
+                >
+                  Download Matched Song
+                </button>
+              </div>
             </div>
           </div>
         )}
+      </div>
+
+      {/* Downloads from 1,000 plus sites banner */}
+      <div className="text-center max-w-md mx-auto pt-2 pb-6">
+        <div className="inline-flex items-center justify-center gap-2.5 px-6 py-2.5 rounded-full bg-[#160d2d]/80 border border-purple-800/40 text-xs sm:text-sm font-semibold text-purple-200 shadow-lg shadow-purple-950/40">
+          <Globe className="w-4 h-4 text-purple-400" />
+          <span>Downloads from 1,000 plus sites</span>
+        </div>
       </div>
     </div>
   );

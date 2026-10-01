@@ -163,11 +163,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-2 py-1.5 px-2.5 rounded-xl bg-[#1a1133] hover:bg-[#25184a] border border-purple-800/40 text-xs font-semibold text-white transition-all cursor-pointer shadow-sm"
               title="Account Settings"
             >
-              <div
-                className={`w-5 h-5 rounded-full bg-gradient-to-br ${currentUser.avatarColor} flex items-center justify-center text-[10px]`}
-              >
-                🍀
-              </div>
+              {currentUser.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt="PFP"
+                  className="w-5 h-5 rounded-full object-cover border border-purple-500/40"
+                />
+              ) : (
+                <div
+                  className={`w-5 h-5 rounded-full bg-gradient-to-br ${currentUser.avatarColor} flex items-center justify-center text-[10px]`}
+                >
+                  👤
+                </div>
+              )}
               <span className="hidden sm:inline truncate max-w-[100px]">@{currentUser.username}</span>
             </button>
           ) : (

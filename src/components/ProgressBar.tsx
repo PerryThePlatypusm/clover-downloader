@@ -13,8 +13,19 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ task, onCancel, onRemo
   const platformInfo = getPlatformInfo(task.platform);
 
   const handleSaveToDevice = async () => {
-    const blob = await createPlayableBlob(task.title, task.format, task.quality);
-    triggerFileDownload(blob, task.fileName);
+    if (task.url && (task.url.startsWith('/api/') || task.url.startsWith('http'))) {
+      const a = document.createElement('a');
+      a.href = task.url;
+      a.download = task.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    const blob = await createPlayableBlob(task.title, task.format, task.quality, task.url);
+    if (blob) {
+      triggerFileDownload(blob, task.fileName);
+    }
   };
 
   return (

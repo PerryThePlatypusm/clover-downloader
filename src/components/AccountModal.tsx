@@ -16,6 +16,8 @@ import {
   KeyRound,
   Info,
   RefreshCw,
+  Camera,
+  Upload,
 } from 'lucide-react';
 
 interface AccountModalProps {
@@ -41,17 +43,39 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   onLogin,
   onLogout,
 }) => {
-  const [mode, setMode] = useState<'signup' | 'login' | 'twoFactor'>('signup');
+  const [mode, setMode] = useState<'signup' | 'login' | 'twoFactor' | 'forgot'>('signup');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_COLORS[0].value);
+  const [customPfp, setCustomPfp] = useState<string>('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [generatedCode, setGeneratedCode] = useState('749216');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Edit profile state when logged in
+  const [editUsername, setEditUsername] = useState(currentUser?.username || '');
+  const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser?.avatarUrl || '');
+
   if (!isOpen) return null;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setCustomPfp(result);
+          setEditAvatarUrl(result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Step 1: Initiate signup and trigger 2FA step
   const handleInitiateSignup = (e: React.FormEvent) => {
@@ -69,7 +93,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       return;
     }
 
-    // Generate random 6-digit 2FA security code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
     setErrorMsg(null);
@@ -90,6 +113,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       username: username.trim(),
       email: email.trim(),
       avatarColor: selectedAvatar,
+      avatarUrl: customPfp || undefined, // custom PFP or bland default
       joinedAt: 'Today',
       downloadsCount: 0,
       notesSentCount: 0,
@@ -130,6 +154,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       username: username.trim() || 'CloverMember',
       email: email.trim() || 'member@clover.io',
       avatarColor: selectedAvatar,
+      avatarUrl: customPfp || undefined,
       joinedAt: 'March 2026',
       downloadsCount: 5,
       notesSentCount: 1,
@@ -141,20 +166,26 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     onClose();
   };
 
-  const handleQuickDemoSignIn = () => {
-    const demoUser: UserProfile = {
-      id: `usr_demo_${Date.now()}`,
-      username: 'CloverFan_2026',
-      email: 'fan@clover.io',
-      avatarColor: 'from-purple-500 to-violet-600',
-      joinedAt: 'Today',
-      downloadsCount: 4,
-      notesSentCount: 1,
-      twoFactorEnabled: true,
-      twoFactorMethod: 'email',
+  const handleSaveProfileEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      username: editUsername.trim() || currentUser.username,
+      avatarUrl: editAvatarUrl || currentUser.avatarUrl,
     };
-    onLogin(demoUser);
-    onClose();
+    onLogin(updatedUser);
+    alert('Account credentials and profile picture updated successfully!');
+  };
+
+  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
+      setErrorMsg('Please enter a valid account email address.');
+      return;
+    }
+    setForgotSent(true);
+    setErrorMsg(null);
   };
 
   return (
@@ -168,13 +199,21 @@ export const AccountModal: React.FC<AccountModalProps> = ({
         </button>
 
         {currentUser ? (
-          /* Profile Mode */
+          /* Profile Mode & Credential / PFP Editor */
           <div className="space-y-6">
             <div className="flex items-center gap-3.5">
-              <div
-                className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentUser.avatarColor} flex items-center justify-center text-xl shadow-lg shadow-purple-500/20`}
-              >
-                🍀
+              <div className="relative">
+                {currentUser.avatarUrl ? (
+                  <img
+                    src={currentUser.avatarUrl}
+                    alt="PFP"
+                    className="w-14 h-14 rounded-2xl object-cover border border-purple-500/40 shadow-lg"
+                  />
+                ) : (
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentUser.avatarColor} flex items-center justify-center text-xl shadow-lg shadow-purple-500/20`}>
+                    👤
+                  </div>
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -188,13 +227,40 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </div>
 
-            {/* Prominent reminder */}
-            <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-800/40 text-xs text-purple-200 flex items-start gap-2">
-              <Info className="w-4 h-4 text-purple-300 shrink-0 mt-0.5" />
-              <span>
-                <strong>Reminder:</strong> Accounts are NOT needed to download videos or songs. You can download freely with or without an account!
-              </span>
-            </div>
+            {/* Credential & PFP Editor Form */}
+            <form onSubmit={handleSaveProfileEdit} className="space-y-3.5 p-4 rounded-xl bg-[#180f2d] border border-purple-900/40">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                Edit Credentials & Profile Picture
+              </h4>
+
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">Username</label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#120c22] border border-purple-900/40 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">Update Profile Picture (PFP)</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 py-2 px-3 rounded-xl bg-[#120c22] hover:bg-[#20153f] border border-purple-900/40 text-xs text-purple-200 flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                    <Upload className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Upload Image File</span>
+                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all cursor-pointer shadow-md shadow-purple-600/20"
+              >
+                Save Changes
+              </button>
+            </form>
 
             {/* User Stats Card */}
             <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#180f2d] border border-purple-900/30">
@@ -243,7 +309,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </div>
 
-            {/* Highlighted code box */}
             <div className="p-4 rounded-xl bg-[#170e2c] border border-purple-800/40 text-xs space-y-2">
               <div className="flex items-center justify-between text-zinc-400">
                 <span>Verification code sent to {email}:</span>
@@ -315,10 +380,79 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </form>
           </div>
+        ) : mode === 'forgot' ? (
+          /* Forgot Password Mode */
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-600/30 border border-purple-400/40 flex items-center justify-center text-purple-300">
+                <Lock className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Reset Password</h3>
+                <p className="text-xs text-purple-300">Enter your account email to receive reset instructions</p>
+              </div>
+            </div>
+
+            {forgotSent ? (
+              <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-200 space-y-3 text-center">
+                <p className="font-semibold">Password reset instructions have been sent to your email address.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotSent(false);
+                    setMode('login');
+                  }}
+                  className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                {errorMsg && (
+                  <div className="p-2.5 rounded-lg bg-rose-950/50 border border-rose-500/40 text-rose-300 text-xs">
+                    {errorMsg}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-purple-300 mb-1">
+                    Account Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#1b1233] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Send Password Reset Email</span>
+                </button>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-xs text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    ← Back to Sign In
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         ) : (
           /* Sign Up / Login Form */
           <div>
-            {/* Header */}
             <div className="flex items-center gap-2.5 mb-1.5">
               <div className="w-8 h-8 rounded-xl bg-purple-600/30 border border-purple-400/40 flex items-center justify-center text-purple-300">
                 <User className="w-4 h-4" />
@@ -330,7 +464,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </div>
 
-            {/* MANDATORY NOTICE: Accounts aren't needed */}
             <div className="mb-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 flex items-start gap-2">
               <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="leading-relaxed">
@@ -338,7 +471,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </div>
 
-            {/* Mode Tabs */}
             <div className="grid grid-cols-2 gap-1 p-1 bg-[#170e2c] rounded-xl border border-purple-900/30 mb-4">
               <button
                 type="button"
@@ -429,27 +561,56 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
 
               {mode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-medium text-purple-300 mb-1.5">
-                    Select Avatar Theme
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {AVATAR_COLORS.map((av, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setSelectedAvatar(av.value)}
-                        className={`w-8 h-8 rounded-xl bg-gradient-to-br ${av.value} flex items-center justify-center text-sm border-2 transition-transform cursor-pointer ${
-                          selectedAvatar === av.value
-                            ? 'scale-110 border-white shadow-md'
-                            : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
-                        title={av.name}
-                      >
-                        {av.icon}
-                      </button>
-                    ))}
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-purple-300 mb-1.5">
+                      Profile Picture (PFP) — Upload Custom or Use Bland Default
+                    </label>
+                    <label className="py-2.5 px-3 rounded-xl bg-[#1b1233] hover:bg-[#20153f] border border-purple-900/40 text-xs text-purple-200 flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                      <Camera className="w-4 h-4 text-purple-400" />
+                      <span>{customPfp ? 'Custom PFP Selected ✓' : 'Upload Custom PFP (Optional)'}</span>
+                      <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                    </label>
+                    <p className="text-[10px] text-zinc-500 mt-1">If left blank, your account defaults to a bland/generic default PFP avatar.</p>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-purple-300 mb-1.5">
+                      Select Avatar Color / Theme
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {AVATAR_COLORS.map((av, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setSelectedAvatar(av.value)}
+                          className={`w-8 h-8 rounded-xl bg-gradient-to-br ${av.value} flex items-center justify-center text-sm border-2 transition-transform cursor-pointer ${
+                            selectedAvatar === av.value
+                              ? 'scale-110 border-white shadow-md'
+                              : 'border-transparent opacity-70 hover:opacity-100'
+                          }`}
+                          title={av.name}
+                        >
+                          {av.icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {mode === 'login' && (
+                <div className="flex justify-end pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('forgot');
+                      setErrorMsg(null);
+                    }}
+                    className="text-xs text-purple-400 hover:text-purple-300 underline cursor-pointer"
+                  >
+                    Forgot Password?
+                  </button>
                 </div>
               )}
 
@@ -462,7 +623,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </button>
             </form>
 
-            {/* Google Firebase Sign In */}
             <div className="pt-3.5 mt-3.5 border-t border-purple-900/40 text-center space-y-2">
               <button
                 type="button"

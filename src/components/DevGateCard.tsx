@@ -209,16 +209,16 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
                 <span>2FA Code Dispatched Securely</span>
               </div>
               <p className="text-zinc-300 text-[11px] leading-relaxed">
-                A randomized 6-digit verification code has been securely sent to your verified channels:
+                A randomized 6-digit verification code has been securely dispatched to your registered secure developer channels.
               </p>
               <div className="space-y-1.5 pt-1 font-mono text-[11px] text-purple-200">
                 <div className="flex items-center gap-2 bg-[#0e071c] p-2 rounded-lg border border-purple-900/40">
                   <Mail className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span className="truncate">jacobperry27@gmail.com</span>
+                  <span className="truncate">••••••••@gmail.com</span>
                 </div>
                 <div className="flex items-center gap-2 bg-[#0e071c] p-2 rounded-lg border border-purple-900/40">
                   <PhoneCall className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span>+1 (630) 486-0932</span>
+                  <span>••••••••0932</span>
                 </div>
               </div>
             </div>

@@ -1,9 +1,11 @@
-import { MediaPlatform, DownloadFormat, MusicTrack } from '../types';
+import { MediaPlatform, DownloadFormat, MusicTrack, StreamingSeriesInfo, AlbumInfo } from '../types';
 
 export function detectPlatform(url: string): MediaPlatform {
   const lower = url.toLowerCase().trim();
+  if (lower.includes('netflix.com')) return 'netflix';
+  if (lower.includes('crunchyroll.com')) return 'crunchyroll';
   if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
-  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'twitter';
+  if (lower.includes('twitter.com') || /(?:^|[\/\.])x\.com(?:[\/\?#]|$)/.test(lower)) return 'twitter';
   if (lower.includes('tiktok.com')) return 'tiktok';
   if (lower.includes('instagram.com')) return 'instagram';
   if (lower.includes('facebook.com') || lower.includes('fb.watch')) return 'facebook';
@@ -11,14 +13,36 @@ export function detectPlatform(url: string): MediaPlatform {
   if (lower.includes('spotify.com')) return 'spotify';
   if (lower.includes('music.apple.com') || lower.includes('apple.com')) return 'applemusic';
   if (lower.includes('soundcloud.com')) return 'soundcloud';
-  if (lower.includes('netflix.com')) return 'netflix';
-  if (lower.includes('crunchyroll.com')) return 'crunchyroll';
   if (lower.includes('twitch.tv')) return 'twitch';
   if (lower.includes('vimeo.com')) return 'vimeo';
   if (lower.includes('dailymotion.com')) return 'dailymotion';
   if (lower.includes('pinterest.com')) return 'pinterest';
   if (lower.includes('threads.net')) return 'threads';
+  if (lower.includes('pornhub.com') || lower.includes('phub')) return 'phub';
   return 'other';
+}
+
+export function autoSelectBestFormat(url: string): DownloadFormat {
+  const platform = detectPlatform(url);
+  switch (platform) {
+    case 'spotify':
+    case 'applemusic':
+    case 'soundcloud':
+      return 'mp3';
+    case 'youtube':
+    case 'tiktok':
+    case 'instagram':
+    case 'twitter':
+    case 'facebook':
+    case 'reddit':
+    case 'netflix':
+    case 'crunchyroll':
+    case 'twitch':
+    case 'vimeo':
+    case 'phub':
+    default:
+      return 'mp4';
+  }
 }
 
 export function getPlatformInfo(platform: MediaPlatform): { name: string; color: string } {
@@ -49,6 +73,8 @@ export function getPlatformInfo(platform: MediaPlatform): { name: string; color:
       return { name: 'Twitch', color: '#a855f7' };
     case 'vimeo':
       return { name: 'Vimeo', color: '#06b6d4' };
+    case 'phub':
+      return { name: 'Pornhub', color: '#ff9900' };
     default:
       return { name: 'Universal Web', color: '#a855f7' };
   }
@@ -240,6 +266,36 @@ export const SAMPLE_MUSIC_TRACKS: MusicTrack[] = [
 
 let audioCtx: AudioContext | null = null;
 
+export async function resolveStreamingSeries(url: string): Promise<StreamingSeriesInfo | null> {
+  try {
+    const res = await fetch(`/api/streaming/resolve-series?url=${encodeURIComponent(url.trim())}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.series) {
+        return data.series;
+      }
+    }
+  } catch (e) {
+    console.warn('resolveStreamingSeries failed:', e);
+  }
+  return null;
+}
+
+export async function resolveMusicAlbum(url: string): Promise<AlbumInfo | null> {
+  try {
+    const res = await fetch(`/api/music/resolve-album?url=${encodeURIComponent(url.trim())}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.album) {
+        return data.album;
+      }
+    }
+  } catch (e) {
+    console.warn('resolveMusicAlbum failed:', e);
+  }
+  return null;
+}
+
 export function playPreviewSound(): void {
   try {
     if (!audioCtx) {
@@ -269,4 +325,6 @@ export function playPreviewSound(): void {
     console.error('Audio preview error', e);
   }
 }
+
+
 
