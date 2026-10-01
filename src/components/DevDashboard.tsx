@@ -94,7 +94,7 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
 
   useEffect(() => {
     fetchDevData();
-    const interval = setInterval(fetchDevData, 10000); // live sync every 10s
+    const interval = setInterval(fetchDevData, 3000); // live sync every 3s
     return () => clearInterval(interval);
   }, []);
 

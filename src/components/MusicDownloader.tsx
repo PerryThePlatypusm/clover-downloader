@@ -39,6 +39,7 @@ import {
 
 interface MusicDownloaderProps {
   onStartDownload: (task: DownloadTask) => void;
+  onUpdateTask?: (task: DownloadTask) => void;
   activeTasks: DownloadTask[];
   onCancelTask: (id: string) => void;
   onRemoveTask: (id: string) => void;
@@ -46,6 +47,7 @@ interface MusicDownloaderProps {
 
 export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   onStartDownload,
+  onUpdateTask,
   activeTasks,
   onCancelTask,
   onRemoveTask,
@@ -164,6 +166,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       if (progress >= 95 && progress < 100) {
         newTask.status = 'processing';
         newTask.progress = 96;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       } else if (progress >= 100) {
         clearInterval(interval);
         newTask.progress = 100;
@@ -171,12 +174,25 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         newTask.downloadedSizeMB = track.sizeMB;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
 
         triggerDirectDownload(`/api/media/sample-track/${track.id}`, fileName);
+
+        fetch('/api/dev/track-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: track.platform,
+            format: selectedFormat,
+            title: `${track.title} — ${track.artist}`,
+            sizeMB: track.sizeMB,
+          }),
+        }).catch(() => {});
       } else {
         newTask.progress = progress;
         newTask.downloadedSizeMB = Math.round(((progress / 100) * track.sizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (track.sizeMB - newTask.downloadedSizeMB) / baseSpeed);
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     }, 120);
   };
@@ -275,6 +291,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         newTask.progress = Math.min(90, Math.round(currentProgress));
         newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     }, 120);
 
@@ -295,13 +312,26 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         newTask.status = 'completed';
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
 
         triggerDirectDownload(result.downloadUrl, finalFilename);
+
+        fetch('/api/dev/track-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: itemPlatform === 'other' ? 'spotify' : itemPlatform,
+            format: selectedFormat,
+            title: finalTitle,
+            sizeMB: result.sizeMB,
+          }),
+        }).catch(() => {});
       } else {
         newTask.status = 'failed';
         newTask.progress = 0;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     } catch (err) {
       clearInterval(interval);
@@ -310,6 +340,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
       newTask.progress = 0;
       newTask.speedMBs = 0;
       newTask.etaSeconds = 0;
+      if (onUpdateTask) onUpdateTask({ ...newTask });
     }
   };
 

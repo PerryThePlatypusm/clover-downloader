@@ -30,6 +30,7 @@ import {
 
 interface SocialDownloaderProps {
   onStartDownload: (task: DownloadTask) => void;
+  onUpdateTask?: (task: DownloadTask) => void;
   activeTasks: DownloadTask[];
   onCancelTask: (id: string) => void;
   onRemoveTask: (id: string) => void;
@@ -37,6 +38,7 @@ interface SocialDownloaderProps {
 
 export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   onStartDownload,
+  onUpdateTask,
   activeTasks,
   onCancelTask,
   onRemoveTask,
@@ -167,6 +169,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         newTask.progress = Math.min(90, Math.round(currentProgress));
         newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     }, intervalTime);
 
@@ -187,6 +190,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         newTask.status = 'completed';
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
 
         // Trigger real file download directly to user's device
         triggerDirectDownload(result.downloadUrl, finalFilename);
@@ -207,6 +211,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         newTask.progress = 0;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     } catch (err) {
       clearInterval(timer);
@@ -215,6 +220,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
       newTask.progress = 0;
       newTask.speedMBs = 0;
       newTask.etaSeconds = 0;
+      if (onUpdateTask) onUpdateTask({ ...newTask });
     }
   };
 

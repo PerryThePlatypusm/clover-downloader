@@ -84,6 +84,10 @@ export default function App() {
     }
   };
 
+  const handleUpdateTask = (updatedTask: DownloadTask) => {
+    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? { ...updatedTask } : t)));
+  };
+
   const handleCancelTask = (id: string) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: 'failed' as const } : t))
@@ -133,6 +137,7 @@ export default function App() {
             {activeTab === 'social' && (
               <SocialDownloader
                 onStartDownload={handleStartDownload}
+                onUpdateTask={handleUpdateTask}
                 activeTasks={tasks}
                 onCancelTask={handleCancelTask}
                 onRemoveTask={handleRemoveTask}
@@ -142,6 +147,7 @@ export default function App() {
             {activeTab === 'music' && (
               <MusicDownloader
                 onStartDownload={handleStartDownload}
+                onUpdateTask={handleUpdateTask}
                 activeTasks={tasks}
                 onCancelTask={handleCancelTask}
                 onRemoveTask={handleRemoveTask}
@@ -151,6 +157,7 @@ export default function App() {
             {activeTab === 'streaming' && (
               <StreamingDownloader
                 onStartDownload={handleStartDownload}
+                onUpdateTask={handleUpdateTask}
                 activeTasks={tasks}
                 onCancelTask={handleCancelTask}
                 onRemoveTask={handleRemoveTask}

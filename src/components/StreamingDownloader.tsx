@@ -31,6 +31,7 @@ import {
 
 interface StreamingDownloaderProps {
   onStartDownload: (task: DownloadTask) => void;
+  onUpdateTask?: (task: DownloadTask) => void;
   activeTasks: DownloadTask[];
   onCancelTask: (id: string) => void;
   onRemoveTask: (id: string) => void;
@@ -38,6 +39,7 @@ interface StreamingDownloaderProps {
 
 export const StreamingDownloader: React.FC<StreamingDownloaderProps> = ({
   onStartDownload,
+  onUpdateTask,
   activeTasks,
   onCancelTask,
   onRemoveTask,
@@ -160,6 +162,7 @@ export const StreamingDownloader: React.FC<StreamingDownloaderProps> = ({
         newTask.progress = Math.min(90, Math.round(currentProgress));
         newTask.downloadedSizeMB = Math.round(((newTask.progress / 100) * newTask.totalSizeMB) * 10) / 10;
         newTask.etaSeconds = Math.max(0.1, (newTask.totalSizeMB - newTask.downloadedSizeMB) / baseSpeed);
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     }, intervalTime);
 
@@ -180,6 +183,7 @@ export const StreamingDownloader: React.FC<StreamingDownloaderProps> = ({
         newTask.status = 'completed';
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
 
         triggerDirectDownload(result.downloadUrl, finalFilename);
 
@@ -198,6 +202,7 @@ export const StreamingDownloader: React.FC<StreamingDownloaderProps> = ({
         newTask.progress = 0;
         newTask.speedMBs = 0;
         newTask.etaSeconds = 0;
+        if (onUpdateTask) onUpdateTask({ ...newTask });
       }
     } catch (err) {
       clearInterval(timer);
@@ -206,6 +211,7 @@ export const StreamingDownloader: React.FC<StreamingDownloaderProps> = ({
       newTask.progress = 0;
       newTask.speedMBs = 0;
       newTask.etaSeconds = 0;
+      if (onUpdateTask) onUpdateTask({ ...newTask });
     }
   };
 
