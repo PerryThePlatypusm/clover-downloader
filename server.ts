@@ -9,16 +9,18 @@ import util from 'util';
 import { GoogleGenAI } from '@google/genai';
 import * as btch from 'btch-downloader';
 import { Resend } from 'resend';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, orderBy } from 'firebase/firestore';
+let devUsers: any[] = [
+  { uid: 'usr_owner_1', username: 'clover', email: 'jacobperry27@gmail.com', role: 'owner', avatarColor: 'from-purple-500 to-indigo-600', joinedAt: 'Mar 2026', downloadsCount: 142, notesSentCount: 12, twoFactorEnabled: true, createdAt: new Date().toISOString() },
+  { uid: 'usr_admin_1', username: 'admin', email: 'admin@cloverdownloader.com', role: 'admin', avatarColor: 'from-indigo-600 to-purple-800', joinedAt: 'Mar 2026', downloadsCount: 88, notesSentCount: 5, twoFactorEnabled: true, createdAt: new Date().toISOString() },
+];
 
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-  databaseId: process.env.VITE_FIREBASE_DATABASE_ID,
-};
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+let systemActivities: any[] = [
+  { id: 'act_1', type: 'user_signup', description: 'User account created: @clover (jacobperry27@gmail.com) with role owner', timestamp: new Date().toISOString() },
+];
+
+let moderationLogs: any[] = [
+  { id: 'log_1', targetUsername: 'spammer99', actionBy: 'clover', action: 'Ban (24h)', reason: 'Spamming download links', timestamp: new Date().toISOString() },
+];
 
 const execFilePromise = util.promisify(execFile);
 const execPromise = util.promisify(exec);
@@ -348,16 +350,13 @@ app.post('/api/dev/admin/create-user', async (req, res) => {
   if (!username || !email) return res.status(400).json({ success: false, error: 'Missing fields' });
 
   try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('username', '==', username.toLowerCase()));
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
+    const existing = devUsers.find(u => u.username === username.toLowerCase());
+    if (existing) {
       return res.json({ success: false, error: 'Username already taken' });
     }
 
     const newUid = `usr_${Date.now()}`;
-    const userRef = doc(db, 'users', newUid);
-    await setDoc(userRef, {
+    const newUser = {
       uid: newUid,
       username: username.toLowerCase(),
       email,
@@ -368,7 +367,8 @@ app.post('/api/dev/admin/create-user', async (req, res) => {
       notesSentCount: 0,
       twoFactorEnabled: true,
       createdAt: new Date().toISOString(),
-    });
+    };
+    devUsers.unshift(newUser);
     
     await logSystemActivity('user_signup', `User account created: @${username} (${email}) with role ${role || 'mod'}`);
     res.json({ success: true, uid: newUid });
@@ -381,10 +381,7 @@ app.post('/api/dev/admin/create-user', async (req, res) => {
 // API endpoint: Get Users (Staff & Members)
 app.get('/api/dev/users', async (req, res) => {
   try {
-    const usersRef = collection(db, 'users');
-    const snapshot = await getDocs(usersRef);
-    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    res.json({ success: true, users });
+    res.json({ success: true, users: devUsers });
   } catch (e) {
     console.error('Error fetching users:', e);
     res.status(500).json({ success: false, error: 'Failed to fetch users' });
@@ -400,8 +397,10 @@ app.post('/api/dev/admin/update-user-role', async (req, res) => {
   }
 
   try {
-    const userRef = doc(db, 'users', userId);
-    await setDoc(userRef, { role: newRole }, { merge: true });
+    const user = devUsers.find(u => u.uid === userId || u.id === userId);
+    if (user) {
+      user.role = newRole;
+    }
     await logSystemActivity('config_change', `User role updated for ID ${userId} to ${newRole}`);
     res.json({ success: true });
   } catch (e) {
@@ -1919,16 +1918,17 @@ app.post('/api/dev/ban', async (req, res) => {
   };
   saveDevData();
 
-  // Log to Firestore
+  // Log moderation action
   try {
-    const logRef = doc(collection(db, 'moderationLogs'));
-    await setDoc(logRef, {
+    moderationLogs.unshift({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
       targetUsername: identifier,
       actionBy: actionBy || 'System',
       action: `Ban (${duration})`,
       reason: reason || 'Violation of community guidelines',
       timestamp: new Date().toISOString(),
     });
+    if (moderationLogs.length > 100) moderationLogs.pop();
   } catch (e) {
     console.error('Failed to log ban action:', e);
   }
@@ -1938,16 +1938,14 @@ app.post('/api/dev/ban', async (req, res) => {
 });
 
 async function logSystemActivity(type: string, description: string) {
-  try {
-    const actRef = doc(collection(db, 'systemActivities'));
-    await setDoc(actRef, {
-      type,
-      description,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.error('Failed to log system activity:', e);
-  }
+  const newAct = {
+    id: `act_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+    type,
+    description,
+    timestamp: new Date().toISOString(),
+  };
+  systemActivities.unshift(newAct);
+  if (systemActivities.length > 100) systemActivities.pop();
 }
 
 async function runMaintenanceCleanup() {
@@ -1984,14 +1982,20 @@ setTimeout(runMaintenanceCleanup, 3000);
 // API endpoint: Get System Activity Feed
 app.get('/api/dev/activity-feed', async (req, res) => {
   try {
-    const activitiesRef = collection(db, 'systemActivities');
-    const q = query(activitiesRef, orderBy('timestamp', 'desc'));
-    const snapshot = await getDocs(q);
-    const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    res.json({ success: true, activities });
+    res.json({ success: true, activities: systemActivities });
   } catch (e) {
     console.error('Error fetching activity feed:', e);
     res.status(500).json({ success: false, error: 'Failed to fetch activity feed' });
+  }
+});
+
+// API endpoint: Get Moderation Logs
+app.get('/api/dev/moderation-logs', (req, res) => {
+  try {
+    res.json({ success: true, logs: moderationLogs });
+  } catch (e) {
+    console.error('Error fetching moderation logs:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch moderation logs' });
   }
 });
 

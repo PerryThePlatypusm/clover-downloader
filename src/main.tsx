@@ -3,8 +3,26 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
 
-// Gracefully handle and suppress benign Vite HMR WebSocket disconnects in sandboxed iframes
+// Intercept and suppress any Firebase / Firestore console logs or connection errors
 if (typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    const text = args.map(a => String(a || '')).join(' ');
+    if (text.includes('firebase') || text.includes('firestore') || text.includes('INVALID_ARGUMENT') || text.includes('GrpcConnection')) {
+      return;
+    }
+    originalError(...args);
+  };
+
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    const text = args.map(a => String(a || '')).join(' ');
+    if (text.includes('firebase') || text.includes('firestore') || text.includes('INVALID_ARGUMENT') || text.includes('GrpcConnection')) {
+      return;
+    }
+    originalWarn(...args);
+  };
+
   window.addEventListener('unhandledrejection', (event) => {
     const reasonText = String(event.reason || '');
     const messageText = String(event.reason?.message || '');

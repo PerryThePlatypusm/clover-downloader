@@ -19,7 +19,7 @@ export const GlowBeamBox: React.FC<GlowBeamBoxProps> = ({
           className="absolute -inset-[150%] glow-beam-rotate"
           style={{
             background:
-              'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(168, 85, 247, 0.9) 55deg, rgba(52, 211, 153, 0.85) 115deg, rgba(99, 102, 241, 0.95) 180deg, rgba(236, 72, 153, 0.85) 245deg, transparent 310deg)',
+              'conic-gradient(from 0deg at 50% 50%, transparent 0deg, var(--accent-color, #c084fc) 55deg, rgba(52, 211, 153, 0.85) 115deg, rgba(99, 102, 241, 0.95) 180deg, var(--accent-color, #c084fc) 245deg, transparent 310deg)',
           }}
         />
       </div>
@@ -30,7 +30,7 @@ export const GlowBeamBox: React.FC<GlowBeamBoxProps> = ({
           className="absolute -inset-[150%] pointer-events-none glow-beam-rotate"
           style={{
             background:
-              'conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(192, 132, 252, 1) 55deg, rgba(52, 211, 153, 0.95) 115deg, rgba(129, 140, 248, 1) 180deg, rgba(244, 114, 182, 0.95) 245deg, transparent 310deg)',
+              'conic-gradient(from 0deg at 50% 50%, transparent 0deg, var(--accent-color, #c084fc) 55deg, rgba(52, 211, 153, 0.95) 115deg, var(--accent-color, #c084fc) 180deg, rgba(244, 114, 182, 0.95) 245deg, transparent 310deg)',
           }}
         />
 

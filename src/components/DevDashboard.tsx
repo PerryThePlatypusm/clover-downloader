@@ -168,12 +168,21 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
   const fetchDevData = async (isInitial = false) => {
     try {
       if (isInitial) setLoading(true);
+      const safeJson = async (res: Response) => {
+        try {
+          const text = await res.text();
+          return JSON.parse(text);
+        } catch {
+          return { success: false };
+        }
+      };
+
       const [statsRes, notesRes, logsRes, usersRes, activityRes] = await Promise.all([
-        fetch('/api/dev/stats').then((r) => r.json()),
-        fetch('/api/dev/notes').then((r) => r.json()),
-        fetch('/api/dev/moderation-logs').then((r) => r.json()),
-        fetch('/api/dev/users').then((r) => r.json()),
-        fetch('/api/dev/activity-feed').then((r) => r.json()),
+        fetch('/api/dev/stats').then(safeJson),
+        fetch('/api/dev/notes').then(safeJson),
+        fetch('/api/dev/moderation-logs').then(safeJson),
+        fetch('/api/dev/users').then(safeJson),
+        fetch('/api/dev/activity-feed').then(safeJson),
       ]);
 
       if (statsRes.success) setStats(statsRes.stats);
@@ -506,8 +515,8 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
           <div className="space-y-3 pt-2 border-t border-purple-900/30">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-purple-300">Active Staff Directory</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {staffUsers.filter(u => u.role && u.role !== 'user').map(staff => (
-                <div key={staff.id} className="flex items-center justify-between p-3 rounded-xl bg-[#180f2d] border border-purple-900/30 text-xs">
+              {staffUsers.filter(u => u.role && u.role !== 'user').map((staff, idx) => (
+                <div key={staff.id || staff.uid || `staff_${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-[#180f2d] border border-purple-900/30 text-xs">
                   <div>
                     <span className="font-bold text-white">@{staff.username}</span>
                     <span className="ml-2 text-zinc-400 font-mono text-[11px]">({staff.email})</span>
@@ -544,8 +553,8 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
             {moderationLogs.length === 0 ? (
               <p className="text-xs text-zinc-400">No moderation actions recorded yet.</p>
             ) : (
-              moderationLogs.map((log) => (
-                <div key={log.id} className="p-3 rounded-lg bg-[#180f2d] border border-purple-900/30 text-xs text-zinc-300">
+              moderationLogs.map((log, idx) => (
+                <div key={log.id || `log_${idx}`} className="p-3 rounded-lg bg-[#180f2d] border border-purple-900/30 text-xs text-zinc-300">
                   <span className="font-mono text-purple-400">[{log.timestamp}]</span>{' '}
                   <strong>{log.actionBy}</strong> {log.action} on @{log.targetUsername}: <span className="italic">{log.reason}</span>
                 </div>
@@ -566,8 +575,8 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
             {systemActivities.length === 0 ? (
               <p className="text-xs text-zinc-400">No system activities recorded yet.</p>
             ) : (
-              systemActivities.map((act) => (
-                <div key={act.id} className="p-3 rounded-lg bg-[#180f2d] border border-purple-900/30 text-xs text-zinc-300 flex items-center justify-between">
+              systemActivities.map((act, idx) => (
+                <div key={act.id || `act_${idx}`} className="p-3 rounded-lg bg-[#180f2d] border border-purple-900/30 text-xs text-zinc-300 flex items-center justify-between">
                   <div>
                     <span className="font-mono text-purple-400">[{new Date(act.timestamp).toLocaleTimeString()}]</span>{' '}
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-purple-900/60 text-purple-300 mr-2">{act.type}</span>
@@ -708,9 +717,9 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
         </div>
 
         <div className="space-y-4">
-          {notes.map((note) => (
+          {notes.map((note, idx) => (
             <div
-              key={note.id}
+              key={note.id || `note_${idx}`}
               className="p-4 sm:p-5 rounded-xl bg-[#180f2d] border border-purple-900/30 space-y-3"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">

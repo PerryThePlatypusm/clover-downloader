@@ -2,6 +2,7 @@
 
 @layer base {
   :root {
+    --accent-color: #c084fc;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-display: 'Syne', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
@@ -153,16 +154,20 @@
 /* Google AI Mode Style Continuously Moving Outer Glow Beam */
 @keyframes spinGlowBeam {
   0% {
-    transform: rotate(0deg);
+    transform: rotate(0deg) translateZ(0);
   }
   100% {
-    transform: rotate(360deg);
+    transform: rotate(360deg) translateZ(0);
   }
 }
 
 .glow-beam-rotate {
-  animation: spinGlowBeam 5.5s linear infinite;
+  animation: spinGlowBeam 7s linear infinite;
   will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 /* Smooth custom scrollbars */

@@ -200,99 +200,45 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
             </div>
           </form>
         ) : (
-          /* Real Inbox & Messages App 2FA Simulation View */
+          /* Real Email Verification Notice & Resend Code */
           <form onSubmit={handleVerify2FA} className="space-y-4 relative z-10">
             <div className="p-4 rounded-xl bg-[#180f2d] border border-purple-800/40 text-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Real 2FA Code Dispatched</span>
-                </div>
-                <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-600/30">
-                  Inbox / SMS Delivered
-                </span>
+              <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Verification Code Sent to Email</span>
               </div>
               <p className="text-zinc-300 text-[11px] leading-relaxed">
-                A real verification code has just been sent to your Email Inbox & Messages app. Check your inbox below:
+                A 6-digit verification code has been dispatched via Resend to <strong className="text-white font-mono">jacobperry27@gmail.com</strong>. Please check your inbox and enter the code below.
               </p>
-
-              {/* Inbox / SMS App Tabs */}
-              <div className="grid grid-cols-2 gap-1 p-1 bg-[#100720] rounded-xl border border-purple-900/40">
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-zinc-400">Didn't receive the email?</span>
                 <button
                   type="button"
-                  onClick={() => setInboxTab('email')}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                    inboxTab === 'email' ? 'bg-purple-600 text-white font-semibold' : 'text-zinc-400 hover:text-white'
-                  }`}
+                  onClick={async () => {
+                    setLoading(true);
+                    setError(null);
+                    try {
+                      const res = await fetch('/api/dev/request-2fa', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identifier: identifierInput, password: passwordInput }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        setError('A new verification code has been sent to your email.');
+                      } else {
+                        setError(data.error || 'Failed to resend code');
+                      }
+                    } catch {
+                      setError('Failed to resend code');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="text-xs text-purple-300 hover:text-white font-semibold underline cursor-pointer"
                 >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Email Inbox (1)</span>
+                  Resend Verification Code
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setInboxTab('sms')}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                    inboxTab === 'sms' ? 'bg-purple-600 text-white font-semibold' : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Messages App (1)</span>
-                </button>
-              </div>
-
-              {/* Simulated App View */}
-              <div className="p-3 rounded-xl bg-[#0b0514] border border-purple-900/60 space-y-2.5 font-mono text-xs">
-                {inboxTab === 'email' ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400 border-b border-purple-900/40 pb-1.5">
-                      <span>From: security@cloverdownloader.com</span>
-                      <span>Just now</span>
-                    </div>
-                    <div className="text-purple-200 font-sans text-xs space-y-1">
-                      <p className="font-semibold text-white">Subject: Clover Dev Suite 2FA Verification Code</p>
-                      <p className="text-zinc-300">Your secure login code is:</p>
-                    </div>
-                    <div className="flex items-center justify-between bg-[#160b2b] p-2.5 rounded-lg border border-purple-800/50 text-base font-bold tracking-widest text-emerald-300 text-center">
-                      <span>{dispatchedCode}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTwoFactorCode(dispatchedCode);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }}
-                        className="text-xs font-sans text-purple-200 hover:text-white px-2.5 py-1 rounded bg-purple-700/60 flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copied ? 'Copied' : 'Auto-fill'}</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400 border-b border-purple-900/40 pb-1.5">
-                      <span>Messages · +1 (630) 486-0932</span>
-                      <span>Just now</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-[#1a1133] border border-purple-800/40 text-purple-100 font-sans text-xs space-y-1.5">
-                      <p className="font-medium">
-                        [Clover Security] Your Developer 2FA code is <strong className="text-emerald-300 font-mono text-sm tracking-wider">{dispatchedCode}</strong>. Do not share this code.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTwoFactorCode(dispatchedCode);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-sans font-semibold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Code Copied Successfully' : 'Auto-fill Verification Code'}</span>
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
 
