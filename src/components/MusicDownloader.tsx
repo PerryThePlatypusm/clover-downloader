@@ -444,7 +444,8 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   };
 
   const handleDeepThinkingSearch = async () => {
-    if (!thinkingQuery.trim() && !thinkingAudioBase64) return;
+    const effectiveQuery = thinkingQuery.trim() || searchQuery.trim();
+    if (!effectiveQuery && !thinkingAudioBase64) return;
     setIsThinking(true);
     setThinkingResult(null);
 
@@ -453,7 +454,7 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: thinkingQuery,
+          query: effectiveQuery,
           audioBase64: thinkingAudioBase64,
           mimeType: thinkingAudioMime,
           type: 'audio_music_identification_humming_singing',

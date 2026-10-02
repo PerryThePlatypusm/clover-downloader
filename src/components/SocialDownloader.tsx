@@ -13,6 +13,7 @@ import {
 import { ProgressBar } from './ProgressBar';
 import { GlowBeamBox } from './GlowBeamBox';
 import { PullToRefreshContainer } from './PullToRefreshContainer';
+import { MediaMetadataPreview } from './MediaMetadataPreview';
 import {
   Link2,
   Sparkles,
@@ -56,6 +57,10 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   const [inputMode, setInputMode] = useState<'single' | 'batch'>('single');
   const [batchInput, setBatchInput] = useState('');
   const [clipboardSuggestion, setClipboardSuggestion] = useState<string | null>(null);
+
+  const [previewMetadata, setPreviewMetadata] = useState<any | null>(null);
+  const [previewTargetUrl, setPreviewTargetUrl] = useState<string>('');
+  const [isResolvingPreview, setIsResolvingPreview] = useState(false);
 
   const handleInputFocus = async () => {
     if (url.trim()) return;
@@ -105,20 +110,55 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
 
   const startDownloadForUrl = async (targetUrl: string) => {
     if (!targetUrl.trim()) return;
+    setIsResolvingPreview(true);
+    setPreviewTargetUrl(targetUrl);
+    try {
+      const resolved = await resolveMediaInfo(targetUrl);
+      setPreviewMetadata({
+        ...resolved,
+        qualities: [
+          '2160p 4K UHD (Studio Master)',
+          '1080p 60fps Full HD (High Quality)',
+          '720p HD (Standard Definition)',
+          '480p SD (Data Saver)',
+          '320 kbps (High Fidelity MP3 Audio)',
+          '128 kbps (Standard MP3)',
+        ],
+      });
+    } catch (e) {
+      setPreviewMetadata({
+        title: 'Media Stream',
+        author: 'Creator',
+        duration: '3:45',
+        sizeMB: 28.5,
+        qualities: [
+          '1080p 60fps Full HD (Studio Master)',
+          '720p HD (High Definition)',
+          '320 kbps (High Fidelity MP3)',
+        ],
+      });
+    } finally {
+      setIsResolvingPreview(false);
+    }
+  };
+
+  const handleConfirmDownload = async () => {
+    if (!previewTargetUrl) return;
+    const targetUrl = previewTargetUrl;
     const itemPlatform = detectPlatform(targetUrl);
     const itemPlatformInfo = getPlatformInfo(itemPlatform);
 
     const quality = format === 'mp4' || format === 'mkv' || format === 'webm' ? videoQuality : audioQuality;
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const baseSpeed = 120.0;
-    const initialEstimatedSize = format === 'mp4' ? 35.0 : 8.5;
+    const initialEstimatedSize = previewMetadata?.sizeMB || (format === 'mp4' ? 35.0 : 8.5);
 
     // Create the task immediately so the user sees instant feedback
     const newTask: DownloadTask = {
       id: taskId,
       url: targetUrl,
-      title: `${itemPlatformInfo.name} Media Stream`,
-      author: 'Resolving stream...',
+      title: previewMetadata?.title || `${itemPlatformInfo.name} Media Stream`,
+      author: previewMetadata?.author || 'Creator',
       platform: itemPlatform,
       format,
       quality,
@@ -133,10 +173,13 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     };
 
     onStartDownload(newTask);
+    setPreviewMetadata(null);
+    setPreviewTargetUrl('');
+    setUrl('');
 
     // Asynchronously resolve real metadata (e.g. exact YouTube video name)
-    let realTitle = `${itemPlatformInfo.name} Video`;
-    let realAuthor = 'Creator';
+    let realTitle = newTask.title;
+    let realAuthor = newTask.author;
     try {
       const resolved = await resolveMediaInfo(targetUrl);
       if (resolved.title) {
@@ -251,7 +294,7 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     startDownloadForUrl(targetUrl);
   };
 
-  const handleQueueBatch = () => {
+  const handleQueueBatch = async () => {
     const urls = batchInput
       .split('\n')
       .map((u) => u.trim())
@@ -263,11 +306,16 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
     }
 
     setValidationError(null);
-    urls.forEach((targetUrl) => {
-      startDownloadForUrl(targetUrl);
-    });
-
     setBatchInput('');
+
+    // Sequentially add and process batch URLs one by one with pacing
+    for (let i = 0; i < urls.length; i++) {
+      const targetUrl = urls[i];
+      await startDownloadForUrl(targetUrl);
+      if (i < urls.length - 1) {
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
   };
 
   const handleReset = () => {
@@ -688,6 +736,25 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
         </div>
       </div>
       </div>
+
+      {previewMetadata && (
+        <MediaMetadataPreview
+          metadata={previewMetadata}
+          selectedQuality={format === 'mp4' || format === 'mkv' || format === 'webm' ? videoQuality : audioQuality}
+          onSelectQuality={(q) => {
+            if (format === 'mp4' || format === 'mkv' || format === 'webm') {
+              setVideoQuality(q);
+            } else {
+              setAudioQuality(q);
+            }
+          }}
+          onConfirm={handleConfirmDownload}
+          onCancel={() => {
+            setPreviewMetadata(null);
+            setPreviewTargetUrl('');
+          }}
+        />
+      )}
     </PullToRefreshContainer>
   );
 };

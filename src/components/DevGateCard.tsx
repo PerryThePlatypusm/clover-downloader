@@ -99,6 +99,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
         notesSentCount: 12,
         twoFactorEnabled: true,
         twoFactorMethod: 'email',
+        role: 'owner',
       };
 
       onAuthorized(cloverUser);
@@ -114,17 +115,17 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-2xl shadow-lg shadow-purple-600/30">
-            🐱
+            🔒
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold tracking-tight text-white">Developer Suite Gate</h2>
+              <h2 className="text-xl font-bold tracking-tight text-white">Dev Login</h2>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
                 Restricted
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              {stage === 'credentials' ? 'Authenticate to access developer suite' : 'Real Email & SMS 2FA Verification'}
+              {stage === 'credentials' ? 'Authenticate to access dev page' : 'Real Email & SMS 2FA Verification'}
             </p>
           </div>
         </div>
@@ -140,7 +141,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
           <form onSubmit={handleVerifyCredentials} className="space-y-4 relative z-10">
             <div>
               <label className="block text-xs font-medium text-purple-300 mb-1">
-                Developer Username or Email
+                Input username or email
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" />
@@ -149,7 +150,7 @@ export const DevGateCard: React.FC<DevGateCardProps> = ({ onAuthorized }) => {
                   required
                   value={identifierInput}
                   onChange={(e) => setIdentifierInput(e.target.value)}
-                  placeholder="clover or jacobperry27@gmail.com"
+                  placeholder="username or email"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#1a1133] border border-purple-900/40 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
                 />
               </div>

@@ -43,6 +43,7 @@ export async function signInAsJacobPerryGoogle(): Promise<any> {
       downloadsCount: 0,
       notesSentCount: 0,
       twoFactorEnabled: true,
+      role: 'owner',
     };
   } catch (err: any) {
     console.warn('Google sign-in popup fallback:', err?.message);
@@ -65,6 +66,7 @@ export async function signInAsJacobPerryGoogle(): Promise<any> {
       downloadsCount: 0,
       notesSentCount: 0,
       twoFactorEnabled: true,
+      role: 'owner',
     };
   }
 }

@@ -1,4 +1,4 @@
-export type TabType = 'social' | 'music' | 'streaming' | 'credits' | 'dev';
+export type TabType = 'social' | 'music' | 'credits' | 'dev';
 
 export type MediaPlatform =
   | 'youtube'
@@ -50,6 +50,7 @@ export interface DownloadTask {
   fileName: string;
   subtitles?: string;
   audioLanguage?: string;
+  turboMode?: boolean;
 }
 
 export interface MusicTrack {
@@ -66,6 +67,8 @@ export interface MusicTrack {
   sizeMB: number;
 }
 
+export type Role = 'owner' | 'developer' | 'admin' | 'mod' | 'user';
+
 export interface UserProfile {
   id: string;
   uid?: string;
@@ -78,6 +81,23 @@ export interface UserProfile {
   notesSentCount: number;
   twoFactorEnabled: boolean;
   twoFactorMethod?: 'email' | 'authenticator';
+  role: Role;
+}
+
+export interface ModerationLog {
+  id: string;
+  targetUsername: string;
+  actionBy: string;
+  action: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface SystemActivity {
+  id: string;
+  type: string;
+  description: string;
+  timestamp: string;
 }
 
 export interface NoteReply {

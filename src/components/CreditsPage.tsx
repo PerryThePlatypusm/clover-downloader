@@ -127,8 +127,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-xl">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🍀</span>
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-400 font-mono">
+              <span className="text-xs font-bold uppercase tracking-widest text-purple-400 font-mono">
                 Original Concept & Vision
               </span>
             </div>
@@ -241,7 +240,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
               <div
                 className={`w-5 h-5 rounded-full bg-gradient-to-br ${currentUser.avatarColor} flex items-center justify-center text-[10px]`}
               >
-                🍀
+                👤
               </div>
               <span>
                 Sending as <strong>@{currentUser.username}</strong>
@@ -329,9 +328,14 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
                       <div
                         className={`w-4 h-4 rounded-full bg-gradient-to-br ${note.avatarColor} flex items-center justify-center text-[8px]`}
                       >
-                        🍀
+                        👤
                       </div>
                       <span className="font-semibold text-purple-200">@{note.username}</span>
+                      {note.username.toLowerCase() === 'clover' && (
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-900/60 text-[9px] font-bold text-purple-300 border border-purple-500/40">
+                          <ShieldCheck className="w-2.5 h-2.5" /> OWNER/ADMIN
+                        </span>
+                      )}
                     </div>
                     <span className="font-mono text-zinc-500">{note.createdAt}</span>
                   </div>

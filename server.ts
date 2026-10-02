@@ -9,6 +9,16 @@ import util from 'util';
 import { GoogleGenAI } from '@google/genai';
 import * as btch from 'btch-downloader';
 import { Resend } from 'resend';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, orderBy } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  databaseId: process.env.VITE_FIREBASE_DATABASE_ID,
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
 
 const execFilePromise = util.promisify(execFile);
 const execPromise = util.promisify(exec);
@@ -21,7 +31,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Directories for real media downloads and sample tracks
 const DOWNLOADS_DIR = path.join(os.tmpdir(), 'clover_downloads');
@@ -209,6 +219,20 @@ async function fetchGenericMediaInfo(url: string) {
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
+// Retry helper
+async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries > 0 && (error.status === 503 || error.message?.includes('503'))) {
+      console.warn(`Attempt failed (503), retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return withRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
 // API endpoint: Media analysis & smart extraction
 app.post('/api/gemini/analyze', async (req, res) => {
   const { url, platform, format, promptType } = req.body;
@@ -241,13 +265,37 @@ Return a concise, clean JSON object (do not wrap in markdown or backticks, only 
 - audioQuality: bitrate estimate like "320 kbps (Lossless Master)"
 - smartSummary: 1-sentence smart breakdown or audio tip`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: systemPrompt,
-      config: {
-        responseMimeType: 'application/json',
+    // Try gemini-3.8-flash, then 3.5-flash, then fallback
+    let response: any;
+    try {
+      response = await withRetry(() => ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: systemPrompt,
+        config: { responseMimeType: 'application/json' }
+      }));
+    } catch (err) {
+      console.warn('Gemini-3.8 failed, trying 3.5-flash');
+      try {
+        response = await withRetry(() => ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: systemPrompt,
+          config: { responseMimeType: 'application/json' }
+        }));
+    } catch (err2) {
+        console.error('All Gemini models failed, using static fallback');
+        return res.json({
+          success: true,
+          data: {
+            title: 'Media Stream (Fallback)',
+            author: 'Verified Creator',
+            duration: '3:45',
+            description: 'Optimized media ready for high-fidelity export.',
+            tags: ['media', 'audio', 'video'],
+            bestFormat: 'MP4 1080p',
+          }
+        });
       }
-    });
+    }
 
     const text = response.text || '{}';
     let parsedData = {};
@@ -291,6 +339,74 @@ Return a concise, clean JSON object (do not wrap in markdown or backticks, only 
         smartSummary: 'High dynamic range media stream with optimal audio channels and frame timing.',
       }
     });
+  }
+});
+
+// API endpoint: Admin Create User
+app.post('/api/dev/admin/create-user', async (req, res) => {
+  const { username, email, role } = req.body;
+  if (!username || !email) return res.status(400).json({ success: false, error: 'Missing fields' });
+
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', username.toLowerCase()));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return res.json({ success: false, error: 'Username already taken' });
+    }
+
+    const newUid = `usr_${Date.now()}`;
+    const userRef = doc(db, 'users', newUid);
+    await setDoc(userRef, {
+      uid: newUid,
+      username: username.toLowerCase(),
+      email,
+      role: role || 'mod',
+      avatarColor: 'from-purple-500 to-indigo-600',
+      joinedAt: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      downloadsCount: 0,
+      notesSentCount: 0,
+      twoFactorEnabled: true,
+      createdAt: new Date().toISOString(),
+    });
+    
+    await logSystemActivity('user_signup', `User account created: @${username} (${email}) with role ${role || 'mod'}`);
+    res.json({ success: true, uid: newUid });
+  } catch (e) {
+    console.error('Error creating user:', e);
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+// API endpoint: Get Users (Staff & Members)
+app.get('/api/dev/users', async (req, res) => {
+  try {
+    const usersRef = collection(db, 'users');
+    const snapshot = await getDocs(usersRef);
+    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, users });
+  } catch (e) {
+    console.error('Error fetching users:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch users' });
+  }
+});
+
+// API endpoint: Update User Role (Owner or Admin only)
+app.post('/api/dev/admin/update-user-role', async (req, res) => {
+  const { userId, newRole, requesterRole } = req.body;
+  if (!userId || !newRole) return res.status(400).json({ success: false, error: 'Missing fields' });
+  if (requesterRole !== 'owner' && requesterRole !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Only Owner and Admin can give or remove roles.' });
+  }
+
+  try {
+    const userRef = doc(db, 'users', userId);
+    await setDoc(userRef, { role: newRole }, { merge: true });
+    await logSystemActivity('config_change', `User role updated for ID ${userId} to ${newRole}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Error updating user role:', e);
+    res.status(500).json({ success: false, error: 'Failed to update user role' });
   }
 });
 
@@ -354,22 +470,22 @@ Return ONLY valid JSON with this exact structure:
 
     let response: any;
     try {
-      response = await ai.models.generateContent({
+      response = await withRetry(() => ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents,
         config: {
           responseMimeType: 'application/json',
         }
-      });
+      }));
     } catch (err38: any) {
       console.warn('gemini-3.8-flash attempt failed, falling back to gemini-3.5-flash:', err38?.message);
-      response = await ai.models.generateContent({
+      response = await withRetry(() => ai.models.generateContent({
         model: 'gemini-3.5-flash',
         contents,
         config: {
           responseMimeType: 'application/json',
         }
-      });
+      }));
     }
 
     const text = response?.text || '{}';
@@ -1064,40 +1180,30 @@ async function downloadYouTubeStream(
 }
 
 // Helper: Download with yt-dlp (SoundCloud and platforms)
-async function downloadWithYtDlp(urlStr: string, ext: string, requestedTitle?: string) {
+async function downloadWithYtDlp(urlStr: string, ext: string, requestedTitle?: string, turboMode: boolean = false) {
   const isAudio = ['mp3', 'wav', 'flac', 'aac', 'opus', 'ogg', 'm4a'].includes(ext);
   const dlId = `ytdl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const outputTemplate = path.join(DOWNLOADS_DIR, `${dlId}.%(ext)s`);
 
-  let ytArgs: string[] = [];
-  if (isAudio) {
-    ytArgs = [
-      '-f',
-      'bestaudio/best',
-      '-x',
-      '--audio-format',
-      ext === 'wav' ? 'wav' : 'mp3',
-      '--user-agent',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      '-o',
-      outputTemplate,
-      urlStr,
-    ];
-  } else {
-    ytArgs = [
-      '-f',
-      'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-      '--merge-output-format',
-      ext,
-      '--user-agent',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      '-o',
-      outputTemplate,
-      urlStr,
-    ];
+  let ytArgs: string[] = [
+    '--user-agent',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    '-o',
+    outputTemplate,
+    urlStr,
+  ];
+
+  if (turboMode) {
+    ytArgs.push('--concurrent-fragments', '8', '--buffer-size', '32M');
   }
 
-  await execFilePromise(YTDLP_BIN, ytArgs, { timeout: 60000 });
+  if (isAudio) {
+    ytArgs.push('-f', 'bestaudio/best', '-x', '--audio-format', ext === 'wav' ? 'wav' : 'mp3');
+  } else {
+    ytArgs.push('-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', '--merge-output-format', ext);
+  }
+
+  await execFilePromise(YTDLP_BIN, ytArgs, { timeout: 120000 });
   const foundFiles = fs.readdirSync(DOWNLOADS_DIR).filter((f) => f.startsWith(dlId));
   if (foundFiles.length === 0) throw new Error('No downloaded file output found');
 
@@ -1193,7 +1299,7 @@ async function downloadTwitterMedia(urlStr: string, ext: string, requestedTitle?
 // Helper: Download Instagram video / reel
 async function downloadInstagramMedia(urlStr: string, ext: string, requestedTitle?: string) {
   try {
-    const ytdlResult = await downloadWithYtDlp(urlStr, ext, requestedTitle);
+    const ytdlResult = await downloadWithYtDlp(urlStr, ext, requestedTitle, true);
     if (ytdlResult) return ytdlResult;
   } catch (e: any) {
     console.warn('yt-dlp instagram extraction fallback:', e?.message);
@@ -1534,7 +1640,7 @@ app.post('/api/media/download', async (req, res) => {
 
     // Case 9: Universal yt-dlp fallback (supports 1000+ websites)
     try {
-      const genericResult = await downloadWithYtDlp(cleanUrl, ext, requestedTitle);
+      const genericResult = await downloadWithYtDlp(cleanUrl, ext, requestedTitle, req.body.turboMode);
       return res.json({
         success: true,
         downloadUrl: `/api/media/file/${genericResult.localFile}?filename=${encodeURIComponent(genericResult.filename)}`,
@@ -1682,6 +1788,8 @@ interface DownloadRecord {
   title: string;
   sizeMB: number;
   timestamp: string;
+  createdAt?: number;
+  status?: 'completed' | 'failed';
 }
 
 interface DevNote {
@@ -1758,7 +1866,7 @@ app.post('/api/dev/request-2fa', async (req, res) => {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder');
     await resend.emails.send({
-      from: 'Clover Security <security@cloverdownloader.com>',
+      from: 'security@resend.dev',
       to: ['jacobperry27@gmail.com'],
       subject: 'Clover Dev Suite 2FA Verification Code',
       html: `<div style="font-family:sans-serif;padding:20px;background:#0b0714;color:#eae5f8;border-radius:12px;"><h2>Clover Developer Suite</h2><p>Your 2FA verification code is:</p><h1 style="color:#10b981;font-size:32px;letter-spacing:4px;">${randomCode}</h1><p>This code expires in 5 minutes.</p></div>`,
@@ -1793,8 +1901,8 @@ app.post('/api/dev/verify-2fa', (req, res) => {
 });
 
 // Ban User API
-app.post('/api/dev/ban', (req, res) => {
-  const { identifier, duration, reason } = req.body; // duration: '1h', '24h', '7d', 'permanent'
+app.post('/api/dev/ban', async (req, res) => {
+  const { identifier, duration, reason, actionBy } = req.body; // duration: '1h', '24h', '7d', 'permanent'
   if (!identifier) {
     return res.status(400).json({ success: false, error: 'Identifier is required' });
   }
@@ -1811,8 +1919,80 @@ app.post('/api/dev/ban', (req, res) => {
   };
   saveDevData();
 
+  // Log to Firestore
+  try {
+    const logRef = doc(collection(db, 'moderationLogs'));
+    await setDoc(logRef, {
+      targetUsername: identifier,
+      actionBy: actionBy || 'System',
+      action: `Ban (${duration})`,
+      reason: reason || 'Violation of community guidelines',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('Failed to log ban action:', e);
+  }
+
   console.log(`[USER BANNED] Identifier: ${identifier} | Duration: ${duration}`);
   return res.json({ success: true, bannedUsers });
+});
+
+async function logSystemActivity(type: string, description: string) {
+  try {
+    const actRef = doc(collection(db, 'systemActivities'));
+    await setDoc(actRef, {
+      type,
+      description,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('Failed to log system activity:', e);
+  }
+}
+
+async function runMaintenanceCleanup() {
+  try {
+    const now = Date.now();
+    const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+    const initialLen = devDownloads.length;
+    // Clear failed download tasks older than 24 hours
+    const activeOrFresh = devDownloads.filter((d: any) => {
+      const isFailed = d.status === 'failed';
+      const isOld = d.createdAt && d.createdAt < twentyFourHoursAgo;
+      if (isFailed && isOld) {
+        return false; // remove
+      }
+      return true;
+    });
+
+    const removedCount = initialLen - activeOrFresh.length;
+    if (removedCount > 0) {
+      devDownloads = activeOrFresh;
+      saveDevData();
+      await logSystemActivity('maintenance', `Cleared ${removedCount} failed download task(s) older than 24 hours`);
+    }
+  } catch (e) {
+    console.error('Maintenance cleanup job error:', e);
+  }
+}
+
+// Run maintenance cleanup periodically (every 5 minutes) and once on startup
+setInterval(runMaintenanceCleanup, 5 * 60 * 1000);
+setTimeout(runMaintenanceCleanup, 3000);
+
+// API endpoint: Get System Activity Feed
+app.get('/api/dev/activity-feed', async (req, res) => {
+  try {
+    const activitiesRef = collection(db, 'systemActivities');
+    const q = query(activitiesRef, orderBy('timestamp', 'desc'));
+    const snapshot = await getDocs(q);
+    const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, activities });
+  } catch (e) {
+    console.error('Error fetching activity feed:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch activity feed' });
+  }
 });
 
 // Delete Note API
@@ -1859,7 +2039,7 @@ app.get('/api/dev/stats', (_req, res) => {
 });
 
 // Record new download from site
-app.post('/api/dev/track-download', (req, res) => {
+app.post('/api/dev/track-download', async (req, res) => {
   const { platform, format, title, sizeMB } = req.body;
   const isMusic = ['spotify', 'soundcloud', 'applemusic'].includes(platform) ||
     ['flac', 'wav', 'alac'].includes(format?.toLowerCase());
@@ -1876,6 +2056,7 @@ app.post('/api/dev/track-download', (req, res) => {
 
   devDownloads.unshift(newRecord);
   saveDevData();
+  await logSystemActivity('download_complete', `Completed download: "${newRecord.title}" (${newRecord.platform} / ${newRecord.format})`);
   return res.json({ success: true, record: newRecord });
 });
 
@@ -1977,6 +2158,12 @@ async function setupVite() {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   }
+
+  // Global error handler to ensure JSON response
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('Global Error Handler:', err);
+    res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Clover Downloader server running on http://0.0.0.0:${PORT}`);

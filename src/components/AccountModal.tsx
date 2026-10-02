@@ -119,6 +119,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       notesSentCount: 0,
       twoFactorEnabled: true,
       twoFactorMethod: 'email',
+      role: 'user',
     };
 
     onLogin(newUser);
@@ -160,6 +161,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       notesSentCount: 1,
       twoFactorEnabled: true,
       twoFactorMethod: 'email',
+      role: 'user',
     };
 
     onLogin(existingUser);

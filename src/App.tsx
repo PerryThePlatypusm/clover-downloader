@@ -5,12 +5,10 @@ import { Navbar } from './components/Navbar';
 import { DownloadsDrawer } from './components/DownloadsDrawer';
 import { AccountModal } from './components/AccountModal';
 import { Footer } from './components/Footer';
-import { CursorCat } from './components/CursorCat';
 import { CatDownloadReaction } from './components/CatDownloadReaction';
 
 const SocialDownloader = lazy(() => import('./components/SocialDownloader').then(m => ({ default: m.SocialDownloader })));
 const MusicDownloader = lazy(() => import('./components/MusicDownloader').then(m => ({ default: m.MusicDownloader })));
-const StreamingDownloader = lazy(() => import('./components/StreamingDownloader').then(m => ({ default: m.StreamingDownloader })));
 const CreditsPage = lazy(() => import('./components/CreditsPage').then(m => ({ default: m.CreditsPage })));
 const DevGateCard = lazy(() => import('./components/DevGateCard').then(m => ({ default: m.DevGateCard })));
 const DevDashboard = lazy(() => import('./components/DevDashboard').then(m => ({ default: m.DevDashboard })));
@@ -35,6 +33,11 @@ export default function App() {
   // Load persistent user profile & set document title
   useEffect(() => {
     document.title = activeTab === 'dev' ? 'Clover Downloader (Dev)' : 'Clover Downloader';
+
+    const savedAccent = localStorage.getItem('clover_accent_color');
+    if (savedAccent) {
+      document.documentElement.style.setProperty('--accent-color', savedAccent);
+    }
 
     const savedUser = localStorage.getItem('clover_current_user');
     if (savedUser) {
@@ -117,7 +120,6 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen flex flex-col text-[#eae5f8] selection:bg-purple-600/30 selection:text-purple-200">
-      <CursorCat />
       {completedDownloadTitle && (
         <CatDownloadReaction
           title={completedDownloadTitle}
@@ -171,16 +173,6 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'streaming' && (
-              <StreamingDownloader
-                onStartDownload={handleStartDownload}
-                onUpdateTask={handleUpdateTask}
-                activeTasks={tasks}
-                onCancelTask={handleCancelTask}
-                onRemoveTask={handleRemoveTask}
-              />
-            )}
-
             {activeTab === 'credits' && (
               <CreditsPage
                 currentUser={currentUser}
@@ -191,7 +183,18 @@ export default function App() {
 
             {/* Separate Dev Suite Page */}
             {activeTab === 'dev' && (
-              isAuthorizedClover ? (
+              currentUser?.role === 'user' ? (
+                <div className="py-20 text-center space-y-4">
+                  <h2 className="text-xl font-bold text-rose-400">Access Denied</h2>
+                  <p className="text-sm text-zinc-400">You do not have permission to access the developer page.</p>
+                  <button
+                    onClick={() => setActiveTab('social')}
+                    className="py-2 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold cursor-pointer"
+                  >
+                    Return to Home
+                  </button>
+                </div>
+              ) : isAuthorizedClover ? (
                 <DevDashboard
                   currentUser={currentUser!}
                   onLogout={handleLogout}
