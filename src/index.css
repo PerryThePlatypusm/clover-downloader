@@ -7,12 +7,20 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
 
+  html {
+    background-color: #0b0813;
+    color: #eae5f8;
+  }
+
   body {
     font-family: var(--font-sans);
-    background-color: #080410;
+    background-color: #0b0813;
     color: #eae5f8;
     overflow-x: hidden;
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, .font-display {
@@ -126,22 +134,9 @@
   transform: translateZ(0);
 }
 
-/* Page Transition Smooth Entrance & Mobile Hardware Acceleration */
+/* Page Transition Smooth Entrance */
 .page-enter {
   animation: pageTransition 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-body, main, header, footer {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  will-change: opacity;
 }
 
 @keyframes pageTransition {

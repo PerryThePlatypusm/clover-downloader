@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, ThankYouNote } from '../types';
+import { safeLocalStorage } from '../utils/storage';
 import {
   Heart,
   ExternalLink,
@@ -42,11 +43,11 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
       .then((data) => {
         if (data.success && Array.isArray(data.notes)) {
           setNotesList(data.notes);
-          localStorage.setItem('clover_notes_v2', JSON.stringify(data.notes));
+          safeLocalStorage.setItem('clover_notes_v2', JSON.stringify(data.notes));
         }
       })
       .catch(() => {
-        const saved = localStorage.getItem('clover_notes_v2');
+        const saved = safeLocalStorage.getItem('clover_notes_v2');
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
@@ -59,7 +60,13 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
   }, []);
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(supportUrl);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(supportUrl).catch(() => {});
+      }
+    } catch {
+      // fallback
+    }
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -86,7 +93,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({
 
     const updated = [newNote, ...notesList];
     setNotesList(updated);
-    localStorage.setItem('clover_notes_v2', JSON.stringify(updated));
+    safeLocalStorage.setItem('clover_notes_v2', JSON.stringify(updated));
     setUserNote('');
 
     try {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DownloadTask, DownloadFormat } from '../types';
 import {
   detectPlatform,
@@ -28,6 +28,7 @@ import {
   Share2,
   AlertCircle,
   X,
+  ChevronDown,
 } from 'lucide-react';
 
 interface SocialDownloaderProps {
@@ -61,6 +62,33 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
   const [previewMetadata, setPreviewMetadata] = useState<any | null>(null);
   const [previewTargetUrl, setPreviewTargetUrl] = useState<string>('');
   const [isResolvingPreview, setIsResolvingPreview] = useState(false);
+
+  const [liveThumbnail, setLiveThumbnail] = useState<any | null>(null);
+  const [isFetchingThumb, setIsFetchingThumb] = useState(false);
+
+  useEffect(() => {
+    const trimmed = url.trim();
+    if (trimmed.length < 8 || (!trimmed.startsWith('http://') && !trimmed.startsWith('https://'))) {
+      setLiveThumbnail(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsFetchingThumb(true);
+      try {
+        const info = await resolveMediaInfo(trimmed);
+        if (info && (info.thumbnail || info.title)) {
+          setLiveThumbnail(info);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setIsFetchingThumb(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [url]);
 
   const handleInputFocus = async () => {
     if (url.trim()) return;
@@ -494,54 +522,99 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
               </div>
             )}
 
-            <div className="relative flex items-center">
-              <div className="absolute left-3.5 sm:left-4 pointer-events-none text-purple-400">
-                <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1 flex items-center">
+                <div className="absolute left-3.5 sm:left-4 pointer-events-none text-purple-400">
+                  <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+
+                <input
+                  type="url"
+                  value={url}
+                  onFocus={handleInputFocus}
+                  onChange={(e) => {
+                    const newUrl = e.target.value;
+                    setUrl(newUrl);
+                    if (validationError) setValidationError(null);
+                    if (newUrl.trim().length > 3) {
+                      const bestFormat = autoSelectBestFormat(newUrl);
+                      setFormat(bestFormat);
+                      setContainerFormat(bestFormat);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleStartDownload();
+                    }
+                  }}
+                  placeholder="paste a link here"
+                  className={`w-full pl-10 sm:pl-12 pr-14 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
+                    validationError
+                      ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
+                      : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
+                  }`}
+                />
+
+                {/* Platform badge inside URL input (if detected) */}
+                {platformInfo.name !== 'Universal Web' && (
+                  <div className="absolute right-3 pointer-events-none">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded text-white shadow-sm"
+                      style={{ backgroundColor: platformInfo.color }}
+                    >
+                      {platformInfo.name}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <input
-                type="url"
-                value={url}
-                onFocus={handleInputFocus}
-                onChange={(e) => {
-                  const newUrl = e.target.value;
-                  setUrl(newUrl);
-                  if (validationError) setValidationError(null);
-                  if (newUrl.trim().length > 3) {
-                    const bestFormat = autoSelectBestFormat(newUrl);
-                    setFormat(bestFormat);
-                    setContainerFormat(bestFormat);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleStartDownload();
-                  }
-                }}
-                placeholder="paste a link here"
-                className={`w-full pl-10 sm:pl-12 pr-28 sm:pr-44 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
-                  validationError
-                    ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
-                    : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
-                }`}
-              />
+              {/* Format & Quality Selector + Download Action Group right next to URL input */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="relative flex-1 sm:flex-initial">
+                  <select
+                    value={`${format}:::${format === 'mp4' || format === 'mkv' || format === 'webm' ? videoQuality : audioQuality}`}
+                    onChange={(e) => {
+                      const [fmt, q] = e.target.value.split(':::');
+                      setFormat(fmt as DownloadFormat);
+                      setContainerFormat(fmt);
+                      if (fmt === 'mp4' || fmt === 'mkv' || fmt === 'webm') {
+                        setVideoQuality(q);
+                      } else {
+                        setAudioQuality(q);
+                      }
+                    }}
+                    className="w-full sm:w-auto pl-3 pr-8 py-3 sm:py-3.5 rounded-xl bg-[#1e153b] hover:bg-[#251b47] border border-purple-800/50 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all appearance-none cursor-pointer shadow-md"
+                    title="Select download quality and format"
+                  >
+                    <optgroup label="Video Formats (MP4 / WebM / MKV)">
+                      <option value="mp4:::1080p 60fps Full HD (Studio Master)">1080p Full HD (MP4)</option>
+                      <option value="mp4:::4K Ultra HD (2160p 60fps)">4K Ultra HD (MP4)</option>
+                      <option value="mp4:::2K Quad HD (1440p 60fps)">2K Quad HD (MP4)</option>
+                      <option value="mp4:::720p HD (60fps)">720p HD (MP4)</option>
+                      <option value="mp4:::480p SD (Lightweight)">480p SD (MP4)</option>
+                      <option value="webm:::1080p 60fps Full HD (Studio Master)">1080p WebM</option>
+                      <option value="mkv:::1080p 60fps Full HD (Studio Master)">1080p MKV</option>
+                    </optgroup>
+                    <optgroup label="Audio Formats (MP3 / FLAC / WAV)">
+                      <option value="mp3:::320 kbps (High Fidelity MP3)">320 kbps MP3 (HQ)</option>
+                      <option value="flac:::Lossless FLAC (24-bit 96kHz Master)">Lossless FLAC</option>
+                      <option value="wav:::Uncompressed WAV (32-bit Float 192kHz)">WAV (Uncompressed)</option>
+                      <option value="m4a:::256 kbps (Studio Quality AAC)">256 kbps AAC / M4A</option>
+                      <option value="mp3:::192 kbps (Standard HQ)">192 kbps MP3</option>
+                      <option value="mp3:::128 kbps (Compact MP3)">128 kbps MP3</option>
+                    </optgroup>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-purple-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
 
-              {/* Direct Quick Download & Platform badge */}
-              <div className="absolute right-2 flex items-center gap-1.5">
-                <span
-                  className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded text-white shadow-sm hidden md:inline-block"
-                  style={{ backgroundColor: platformInfo.color }}
-                >
-                  {platformInfo.name}
-                </span>
                 <button
                   type="button"
                   onClick={handleStartDownload}
-                  className="px-3 sm:px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 active:scale-95"
+                  className="px-4 py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
                   title="Click to download"
                 >
-                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                  <ArrowRight className="w-4 h-4 shrink-0" />
                   <span>Download</span>
                 </button>
               </div>
@@ -552,6 +625,36 @@ export const SocialDownloader: React.FC<SocialDownloaderProps> = ({
               <div className="flex items-center gap-2 p-3 mt-2.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium animate-in fade-in duration-200 shadow-md">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span className="break-words">{validationError}</span>
+              </div>
+            )}
+
+            {/* Live Instant Thumbnail & Metadata Preview Card */}
+            {liveThumbnail && (
+              <div className="mt-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-[#1b1035] to-[#120a22] border border-purple-500/40 flex items-center gap-3.5 animate-in fade-in zoom-in-95 duration-200 shadow-xl">
+                <div className="w-20 h-16 rounded-xl bg-purple-950/80 border border-purple-500/30 overflow-hidden shrink-0 relative shadow-inner">
+                  {liveThumbnail.thumbnail ? (
+                    <img src={liveThumbnail.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-purple-400">
+                      <Video className="w-6 h-6" />
+                    </div>
+                  )}
+                  {liveThumbnail.duration && (
+                    <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/80 text-[9px] font-mono font-bold text-white">
+                      {liveThumbnail.duration}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
+                      {liveThumbnail.platform || platformInfo.name}
+                    </span>
+                    {isFetchingThumb && <span className="text-[10px] text-purple-400 animate-pulse">Resolving thumbnail...</span>}
+                  </div>
+                  <h4 className="text-xs font-bold text-white truncate">{liveThumbnail.title}</h4>
+                  <p className="text-[11px] text-purple-300 truncate">By {liveThumbnail.author}</p>
+                </div>
               </div>
             )}
           </div>

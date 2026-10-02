@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TabType, DownloadTask, UserProfile } from './types';
 import { AmbientBackground } from './components/AmbientBackground';
 import { Navbar } from './components/Navbar';
@@ -6,12 +6,12 @@ import { DownloadsDrawer } from './components/DownloadsDrawer';
 import { AccountModal } from './components/AccountModal';
 import { Footer } from './components/Footer';
 import { CatDownloadReaction } from './components/CatDownloadReaction';
-
-const SocialDownloader = lazy(() => import('./components/SocialDownloader').then(m => ({ default: m.SocialDownloader })));
-const MusicDownloader = lazy(() => import('./components/MusicDownloader').then(m => ({ default: m.MusicDownloader })));
-const CreditsPage = lazy(() => import('./components/CreditsPage').then(m => ({ default: m.CreditsPage })));
-const DevGateCard = lazy(() => import('./components/DevGateCard').then(m => ({ default: m.DevGateCard })));
-const DevDashboard = lazy(() => import('./components/DevDashboard').then(m => ({ default: m.DevDashboard })));
+import { SocialDownloader } from './components/SocialDownloader';
+import { MusicDownloader } from './components/MusicDownloader';
+import { CreditsPage } from './components/CreditsPage';
+import { DevGateCard } from './components/DevGateCard';
+import { DevDashboard } from './components/DevDashboard';
+import { safeLocalStorage } from './utils/storage';
 
 export default function App() {
   const isDevSite =
@@ -34,12 +34,12 @@ export default function App() {
   useEffect(() => {
     document.title = activeTab === 'dev' ? 'Clover Downloader (Dev)' : 'Clover Downloader';
 
-    const savedAccent = localStorage.getItem('clover_accent_color');
+    const savedAccent = safeLocalStorage.getItem('clover_accent_color');
     if (savedAccent) {
       document.documentElement.style.setProperty('--accent-color', savedAccent);
     }
 
-    const savedUser = localStorage.getItem('clover_current_user');
+    const savedUser = safeLocalStorage.getItem('clover_current_user');
     if (savedUser) {
       try {
         setCurrentUser(JSON.parse(savedUser));
@@ -51,19 +51,19 @@ export default function App() {
 
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
-    localStorage.setItem('clover_current_user', JSON.stringify(user));
+    safeLocalStorage.setItem('clover_current_user', JSON.stringify(user));
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('clover_current_user');
+    safeLocalStorage.removeItem('clover_current_user');
   };
 
   const handleNoteSent = () => {
     if (currentUser) {
       const updated = { ...currentUser, notesSentCount: currentUser.notesSentCount + 1 };
       setCurrentUser(updated);
-      localStorage.setItem('clover_current_user', JSON.stringify(updated));
+      safeLocalStorage.setItem('clover_current_user', JSON.stringify(updated));
     }
   };
 
@@ -86,7 +86,7 @@ export default function App() {
     if (currentUser) {
       const updated = { ...currentUser, downloadsCount: currentUser.downloadsCount + 1 };
       setCurrentUser(updated);
-      localStorage.setItem('clover_current_user', JSON.stringify(updated));
+      safeLocalStorage.setItem('clover_current_user', JSON.stringify(updated));
     }
   };
 
@@ -142,70 +142,61 @@ export default function App() {
         onOpenDevDashboard={() => setActiveTab('dev')}
       />
 
-      {/* Main Content View with Code Splitting & Suspense Lazy Loading */}
+      {/* Main Content View */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 relative z-10">
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-32">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-              <span className="text-xs text-purple-300 font-mono tracking-wider">Loading Cloverspace...</span>
-            </div>
-          </div>
-        }>
-          <div key={activeTab} className="page-enter">
-            {activeTab === 'social' && (
-              <SocialDownloader
-                onStartDownload={handleStartDownload}
-                onUpdateTask={handleUpdateTask}
-                activeTasks={tasks}
-                onCancelTask={handleCancelTask}
-                onRemoveTask={handleRemoveTask}
-              />
-            )}
+        <div key={activeTab} className="page-enter">
+          {activeTab === 'social' && (
+            <SocialDownloader
+              onStartDownload={handleStartDownload}
+              onUpdateTask={handleUpdateTask}
+              activeTasks={tasks}
+              onCancelTask={handleCancelTask}
+              onRemoveTask={handleRemoveTask}
+            />
+          )}
 
-            {activeTab === 'music' && (
-              <MusicDownloader
-                onStartDownload={handleStartDownload}
-                onUpdateTask={handleUpdateTask}
-                activeTasks={tasks}
-                onCancelTask={handleCancelTask}
-                onRemoveTask={handleRemoveTask}
-              />
-            )}
+          {activeTab === 'music' && (
+            <MusicDownloader
+              onStartDownload={handleStartDownload}
+              onUpdateTask={handleUpdateTask}
+              activeTasks={tasks}
+              onCancelTask={handleCancelTask}
+              onRemoveTask={handleRemoveTask}
+            />
+          )}
 
-            {activeTab === 'credits' && (
-              <CreditsPage
-                currentUser={currentUser}
-                onOpenAccountModal={() => setIsAccountModalOpen(true)}
-                onNoteSent={handleNoteSent}
-              />
-            )}
+          {activeTab === 'credits' && (
+            <CreditsPage
+              currentUser={currentUser}
+              onOpenAccountModal={() => setIsAccountModalOpen(true)}
+              onNoteSent={handleNoteSent}
+            />
+          )}
 
-            {/* Separate Dev Suite Page */}
-            {activeTab === 'dev' && (
-              currentUser?.role === 'user' ? (
-                <div className="py-20 text-center space-y-4">
-                  <h2 className="text-xl font-bold text-rose-400">Access Denied</h2>
-                  <p className="text-sm text-zinc-400">You do not have permission to access the developer page.</p>
-                  <button
-                    onClick={() => setActiveTab('social')}
-                    className="py-2 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold cursor-pointer"
-                  >
-                    Return to Home
-                  </button>
-                </div>
-              ) : isAuthorizedClover ? (
-                <DevDashboard
-                  currentUser={currentUser!}
-                  onLogout={handleLogout}
-                  onSwitchToLivePreview={() => setActiveTab('social')}
-                />
-              ) : (
-                <DevGateCard onAuthorized={handleLogin} />
-              )
-            )}
-          </div>
-        </Suspense>
+          {/* Separate Dev Suite Page */}
+          {activeTab === 'dev' && (
+            currentUser?.role === 'user' ? (
+              <div className="py-20 text-center space-y-4">
+                <h2 className="text-xl font-bold text-rose-400">Access Denied</h2>
+                <p className="text-sm text-zinc-400">You do not have permission to access the developer page.</p>
+                <button
+                  onClick={() => setActiveTab('social')}
+                  className="py-2 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold cursor-pointer"
+                >
+                  Return to Home
+                </button>
+              </div>
+            ) : isAuthorizedClover ? (
+              <DevDashboard
+                currentUser={currentUser!}
+                onLogout={handleLogout}
+                onSwitchToLivePreview={() => setActiveTab('social')}
+              />
+            ) : (
+              <DevGateCard onAuthorized={handleLogin} />
+            )
+          )}
+        </div>
       </main>
 
       {/* Footer */}

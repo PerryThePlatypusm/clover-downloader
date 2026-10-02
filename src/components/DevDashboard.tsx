@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ThankYouNote, ModerationLog, Role, SystemActivity } from '../types';
 import { useRoleAccess } from '../utils/rbac';
+import { safeLocalStorage } from '../utils/storage';
 import {
   Activity,
   Music,
@@ -99,12 +100,12 @@ export const DevDashboard: React.FC<DevDashboardProps> = ({
   ];
 
   const [accentColor, setAccentColor] = useState<string>(
-    () => localStorage.getItem('clover_accent_color') || '#c084fc'
+    () => safeLocalStorage.getItem('clover_accent_color') || '#c084fc'
   );
 
   const handleApplyAccent = (color: string) => {
     setAccentColor(color);
-    localStorage.setItem('clover_accent_color', color);
+    safeLocalStorage.setItem('clover_accent_color', color);
     document.documentElement.style.setProperty('--accent-color', color);
   };
 

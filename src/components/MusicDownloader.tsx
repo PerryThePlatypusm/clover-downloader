@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MusicTrack, DownloadTask, DownloadFormat } from '../types';
 import {
   SAMPLE_MUSIC_TRACKS,
@@ -36,6 +36,7 @@ import {
   Square,
   RotateCcw,
   Check,
+  ChevronDown,
 } from 'lucide-react';
 
 interface MusicDownloaderProps {
@@ -59,6 +60,33 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
   const [isPlayingPreview, setIsPlayingPreview] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [clipboardSuggestion, setClipboardSuggestion] = useState<string | null>(null);
+
+  const [liveMusicThumb, setLiveMusicThumb] = useState<any | null>(null);
+  const [isFetchingMusicThumb, setIsFetchingMusicThumb] = useState(false);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 8 || (!trimmed.startsWith('http://') && !trimmed.startsWith('https://'))) {
+      setLiveMusicThumb(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsFetchingMusicThumb(true);
+      try {
+        const info = await resolveMediaInfo(trimmed);
+        if (info && (info.thumbnail || info.title)) {
+          setLiveMusicThumb(info);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setIsFetchingMusicThumb(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleInputFocus = async () => {
     if (searchQuery.trim()) return;
@@ -527,44 +555,71 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
             </div>
           )}
 
-          <div className="relative flex items-center">
-            <div className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1 flex items-center">
+              <div className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={handleInputFocus}
+                onChange={(e) => {
+                  const q = e.target.value;
+                  setSearchQuery(q);
+                  if (validationError) setValidationError(null);
+                  if (q.trim().length > 3) {
+                    const bestFmt = autoSelectBestFormat(q);
+                    setSelectedFormat(bestFmt);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleDirectMusicDownload();
+                  }
+                }}
+                placeholder="paste a music link or search title here"
+                className={`w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
+                  validationError
+                    ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
+                    : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
+                }`}
+              />
             </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onFocus={handleInputFocus}
-              onChange={(e) => {
-                const q = e.target.value;
-                setSearchQuery(q);
-                if (validationError) setValidationError(null);
-                if (q.trim().length > 3) {
-                  const bestFmt = autoSelectBestFormat(q);
-                  setSelectedFormat(bestFmt);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleDirectMusicDownload();
-                }
-              }}
-              placeholder="paste a link here"
-              className={`w-full pl-10 sm:pl-12 pr-28 sm:pr-48 py-3 sm:py-3.5 rounded-xl bg-[#1b1233] border text-white placeholder-zinc-500 text-xs sm:text-sm md:text-base focus:outline-none focus:ring-2 transition-all shadow-inner ${
-                validationError
-                  ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20'
-                  : 'border-purple-800/40 focus:border-purple-500 focus:ring-purple-500/20'
-              }`}
-            />
-            <div className="absolute right-2 flex items-center gap-1.5">
+
+            {/* Quality and Format selector + Download button right next to URL input */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative flex-1 sm:flex-initial">
+                <select
+                  value={`${selectedFormat}:::${selectedBitrate}`}
+                  onChange={(e) => {
+                    const [fmt, bitrate] = e.target.value.split(':::');
+                    setSelectedFormat(fmt as DownloadFormat);
+                    setSelectedBitrate(bitrate);
+                  }}
+                  className="w-full sm:w-auto pl-3 pr-8 py-3 sm:py-3.5 rounded-xl bg-[#1e153b] hover:bg-[#251b47] border border-purple-800/50 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all appearance-none cursor-pointer shadow-md"
+                  title="Select audio format and quality / bitrate"
+                >
+                  <option value="mp3:::320 kbps (High Fidelity MP3)">320 kbps MP3 (HQ)</option>
+                  <option value="flac:::24-bit / 192kHz (Master FLAC)">FLAC (192kHz Master)</option>
+                  <option value="wav:::32-bit Float Studio Master (WAV)">WAV (32-bit Studio Master)</option>
+                  <option value="alac:::Lossless ALAC (Apple Lossless)">ALAC (Apple Lossless)</option>
+                  <option value="m4a:::256 kbps (Studio Quality AAC)">256 kbps AAC / M4A</option>
+                  <option value="mp3:::192 kbps (Standard HQ)">192 kbps MP3 (Standard)</option>
+                  <option value="mp3:::128 kbps (Compact MP3)">128 kbps MP3 (Compact)</option>
+                  <option value="opus:::Opus (160 kbps Ultra-Efficient)">Opus 160 kbps</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-purple-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
               <button
                 type="button"
                 onClick={handleDirectMusicDownload}
-                className="px-3 sm:px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                title="Press Enter or click to download"
+                className="px-4 py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
+                title="Click to download"
               >
-                <Download className="w-3.5 h-3.5 shrink-0" />
+                <Download className="w-4 h-4 shrink-0" />
                 <span>Download</span>
               </button>
             </div>
@@ -575,6 +630,36 @@ export const MusicDownloader: React.FC<MusicDownloaderProps> = ({
             <div className="flex items-center gap-2 p-3 mt-2 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium animate-in fade-in duration-200 shadow-md">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               <span className="break-words">{validationError}</span>
+            </div>
+          )}
+
+          {/* Live Instant Thumbnail & Metadata Preview Card */}
+          {liveMusicThumb && (
+            <div className="mt-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-[#1b1035] to-[#120a22] border border-purple-500/40 flex items-center gap-3.5 animate-in fade-in zoom-in-95 duration-200 shadow-xl">
+              <div className="w-20 h-16 rounded-xl bg-purple-950/80 border border-purple-500/30 overflow-hidden shrink-0 relative shadow-inner">
+                {liveMusicThumb.thumbnail ? (
+                  <img src={liveMusicThumb.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-purple-400">
+                    <Disc3 className="w-6 h-6" />
+                  </div>
+                )}
+                {liveMusicThumb.duration && (
+                  <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/80 text-[9px] font-mono font-bold text-white">
+                    {liveMusicThumb.duration}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/30">
+                    {liveMusicThumb.platform || 'Audio Track'}
+                  </span>
+                  {isFetchingMusicThumb && <span className="text-[10px] text-purple-400 animate-pulse">Resolving thumbnail...</span>}
+                </div>
+                <h4 className="text-xs font-bold text-white truncate">{liveMusicThumb.title}</h4>
+                <p className="text-[11px] text-purple-300 truncate">By {liveMusicThumb.author}</p>
+              </div>
             </div>
           )}
         </div>
